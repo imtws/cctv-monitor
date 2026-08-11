@@ -14,6 +14,8 @@ let modalHls          = null;
 let settingsDrawerMode = 'batch';
 let settingsDrawerIds  = [];
 let currentViewMode   = 'card';
+let lastFragLoaded    = {}; // 각 캠 ID별 마지막 세그먼트 로드 타임스탬프 저장
+
 
 /* ═══════════════════════════════════════════════════════════
    레이아웃 / 뷰 모드
@@ -339,6 +341,7 @@ function renderVideoGrid() {
                         <div class="cam-title">CAM ${cam.num < 10 ? '0' + cam.num : cam.num} - ${cam.category}</div>
                         <div class="cam-stadium">${cam.stadium}</div>
                         <div class="status-chip">${getStatusMarkup(cam.status)}</div>
+                        <div class="segment-chip" id="seg-badge-${cam.id}">${getSegmentMarkup(cam.id)}</div>
                         <div class="schedule-chip">${getScheduleMarkup(cam)}</div>
                     </div>
                     <a href="${cam.ddns}" target="_blank" class="btn" style="padding: 2px 8px; font-size: 0.75rem;" title="DDNS"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
@@ -357,6 +360,11 @@ function renderVideoGrid() {
             hls.loadSource(streamUrl);
             hls.attachMedia(videoEl);
             hlsInstances[cam.id] = hls;
+
+            hls.on(Hls.Events.FRAG_LOADED, () => {
+                lastFragLoaded[cam.id] = Date.now();
+                updateSegmentUI(cam.id);
+            });
         } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
             videoEl.src = streamUrl;
         }
@@ -390,6 +398,7 @@ function renderTable() {
                         <span class="mini-tag">${cam.stadium}</span>
                         <span class="mini-tag">${cam.category}</span>
                     </div>
+                    <div class="segment-chip" id="list-seg-badge-${cam.id}">${getSegmentMarkup(cam.id)}</div>
                     <div class="schedule-chip">${getScheduleMarkup(cam)}</div>
                 </div>
                 <div class="col-stadium">${cam.stadium}</div>
@@ -416,6 +425,7 @@ function renderTable() {
                         </div>
                         <div class="list-detail-mini">
                             <div class="detail-card"><label>상태</label><div class="value">${escapeHtml(getStatusLabel(cam.status))}</div></div>
+                            <div class="detail-card"><label>세그먼트 갱신</label><div class="value small" id="detail-seg-badge-${cam.id}">${getSegmentMarkup(cam.id)}</div></div>
                             ${(() => { const sup = cam.suppress_until ? new Date(cam.suppress_until) : null; if (sup && sup > new Date()) { return `<div class="detail-card" style="border-color:rgba(245,158,11,0.4);"><label style="color:#f59e0b;">스케줄</label><div class="value small" style="color:#f59e0b;">스케줄~${sup.toLocaleString('ko-KR', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div></div>`; } return ''; })()}
                             <div class="detail-card"><label>DDNS</label><div class="value small">
                                 ${getSafeExternalUrl(cam.ddns)
@@ -492,6 +502,11 @@ function loadListPreview(camId, streamUrl, forceReload = false) {
         hls.loadSource(streamUrl);
         hls.attachMedia(videoEl);
         listPreviewHls[camId] = hls;
+
+        hls.on(Hls.Events.FRAG_LOADED, () => {
+            lastFragLoaded[camId] = Date.now();
+            updateSegmentUI(camId);
+        });
     } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
         videoEl.src = streamUrl;
     }
@@ -849,6 +864,46 @@ function escapeHtml(value) {
 function filterTable() { applyFilters(); }
 function checkBatchSelection() { syncMasterSelection(); }
 
+/* ═══════════════════════════════════════════════════════════
+   세그먼트 수신 상태 헬퍼
+   ═══════════════════════════════════════════════════════════ */
+
+function getSegmentMarkup(camId) {
+    const lastTime = lastFragLoaded[camId];
+    if (!lastTime) {
+        return `<span class="seg-pill waiting"><i class="fa-solid fa-spinner fa-spin"></i> 수신 대기중</span>`;
+    }
+
+    const elapsedSec = Math.floor((Date.now() - lastTime) / 1000);
+    const elapsedMin = Math.floor(elapsedSec / 60);
+
+    if (elapsedSec < 120) { // 2분 미만 (정상)
+        return `<span class="seg-pill ok"><i class="fa-solid fa-circle-play"></i> 갱신 ${elapsedSec}초전 (OK)</span>`;
+    } else if (elapsedMin < 5) { // 5분 미만 (지연)
+        return `<span class="seg-pill warning"><i class="fa-solid fa-circle-exclamation"></i> 갱신 ${elapsedMin}분전 (지연)</span>`;
+    } else { // 5분 이상 (장애)
+        return `<span class="seg-pill critical"><i class="fa-solid fa-circle-stop"></i> 갱신 ${elapsedMin}분전 (중단)</span>`;
+    }
+}
+
+function updateSegmentUI(camId) {
+    const markup = getSegmentMarkup(camId);
+    const cardEl = document.getElementById(`seg-badge-${camId}`);
+    if (cardEl) cardEl.innerHTML = markup;
+
+    const listEl = document.getElementById(`list-seg-badge-${camId}`);
+    if (listEl) listEl.innerHTML = markup;
+
+    const detailEl = document.getElementById(`detail-seg-badge-${camId}`);
+    if (detailEl) detailEl.innerHTML = markup;
+}
+
+function updateAllSegmentsUI() {
+    allCctvs.forEach(cam => {
+        updateSegmentUI(cam.id);
+    });
+}
+
 function showToast(msg) {
     const toast = document.getElementById('toast');
     toast.textContent  = msg;
@@ -864,4 +919,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadData();
     updateStickyOffsets();
     window.addEventListener('resize', updateStickyOffsets);
+
+    // 10초마다 세그먼트 경과 시간 UI 자동 갱신
+    setInterval(updateAllSegmentsUI, 10000);
 });

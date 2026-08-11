@@ -513,3 +513,41 @@ table.cam-table tr:hover { background: rgba(255, 255, 255, 0.03); }
     z-index: 2000;
     font-weight: 500;
 }
+
+/* ── 세그먼트 수신 상태 스타일 ─────────────────────────────── */
+.segment-chip {
+    margin-top: 4px;
+    margin-bottom: 2px;
+    display: inline-flex;
+}
+.seg-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+}
+.seg-pill.waiting {
+    background: rgba(100, 116, 139, 0.12);
+    color: #94a3b8;
+    border-color: rgba(100, 116, 139, 0.25);
+}
+.seg-pill.ok {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+    border-color: rgba(16, 185, 129, 0.25);
+}
+.seg-pill.warning {
+    background: rgba(245, 158, 11, 0.12);
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.25);
+}
+.seg-pill.critical {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.25);
+}
+
