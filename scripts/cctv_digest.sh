@@ -185,6 +185,54 @@ done < "$RESULTS_FILE"
 
 PROBLEM_COUNT=${#PROBLEM_ROWS[@]}
 
+# ---- 4.5) 웹 모니터링 연동용 실시간 상태 JSON 저장 ----
+if [ -f "$RESULTS_FILE" ]; then
+    RESULTS_FILE="$RESULTS_FILE" python3 - <<'PYIN'
+import datetime
+import json
+import os
+import re
+import time
+
+results_path = os.environ.get("RESULTS_FILE")
+out_json = "/home/www/cammon/data/live_status.json"
+
+status_map = {}
+if results_path and os.path.exists(results_path):
+    with open(results_path, 'r', encoding='utf-8', errors='ignore') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split('\t')
+            if len(parts) >= 3:
+                hn, rc, out = parts[0], parts[1], parts[2]
+                
+                file_age = None
+                age_match = re.search(r'file_age=(\d+)', out)
+                if age_match:
+                    file_age = int(age_match.group(1))
+                
+                status_map[hn] = {
+                    "rc": int(rc),
+                    "output": out,
+                    "file_age": file_age,
+                    "checked_at": int(time.time())
+                }
+
+# 원자적 쓰기
+if status_map:
+    tmp_path = out_json + ".tmp"
+    try:
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            json.dump(status_map, f, indent=2, ensure_ascii=False)
+        os.rename(tmp_path, out_json)
+        os.chmod(out_json, 0o666)
+    except Exception as e:
+        pass
+PYIN
+fi
+
 # ---- 5) 이전 장애 상태 읽기 ----
 
 PREV_PROBLEM_HOSTS=()

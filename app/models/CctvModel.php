@@ -51,11 +51,41 @@ class CctvModel
 
     public function getAllCctvs(): array
     {
-        return $this->readJson($this->cctvFile, []);
+        $cctvs = $this->readJson($this->cctvFile, []);
+        $liveFile = dirname(__DIR__, 2) . '/data/live_status.json';
+        
+        if (file_exists($liveFile)) {
+            $liveStatus = $this->readJson($liveFile, []);
+            foreach ($cctvs as &$cam) {
+                $num = isset($cam['num']) ? (int)$cam['num'] : null;
+                $hostName = ($num !== null) ? sprintf("example-account-cam-%02d", $num) : (isset($cam['id']) ? $cam['id'] : '');
+                
+                if (isset($liveStatus[$hostName])) {
+                    $cam['live_status'] = $liveStatus[$hostName];
+                } else {
+                    $cam['live_status'] = null;
+                }
+            }
+            unset($cam);
+        } else {
+            foreach ($cctvs as &$cam) {
+                $cam['live_status'] = null;
+            }
+            unset($cam);
+        }
+        
+        return $cctvs;
     }
 
     public function saveCctvs(array $cctvs): bool
     {
+        // 파일 저장 시 동적 상태 필드인 live_status는 지우고 저장
+        foreach ($cctvs as &$cam) {
+            if (array_key_exists('live_status', $cam)) {
+                unset($cam['live_status']);
+            }
+        }
+        unset($cam);
         return $this->writeJson($this->cctvFile, $cctvs);
     }
 

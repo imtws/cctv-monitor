@@ -360,11 +360,6 @@ function renderVideoGrid() {
             hls.loadSource(streamUrl);
             hls.attachMedia(videoEl);
             hlsInstances[cam.id] = hls;
-
-            hls.on(Hls.Events.FRAG_LOADED, () => {
-                lastFragLoaded[cam.id] = Date.now();
-                updateSegmentUI(cam.id);
-            });
         } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
             videoEl.src = streamUrl;
         }
@@ -502,11 +497,6 @@ function loadListPreview(camId, streamUrl, forceReload = false) {
         hls.loadSource(streamUrl);
         hls.attachMedia(videoEl);
         listPreviewHls[camId] = hls;
-
-        hls.on(Hls.Events.FRAG_LOADED, () => {
-            lastFragLoaded[camId] = Date.now();
-            updateSegmentUI(camId);
-        });
     } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
         videoEl.src = streamUrl;
     }
@@ -869,20 +859,26 @@ function checkBatchSelection() { syncMasterSelection(); }
    ═══════════════════════════════════════════════════════════ */
 
 function getSegmentMarkup(camId) {
-    const lastTime = lastFragLoaded[camId];
-    if (!lastTime) {
-        return `<span class="seg-pill waiting"><i class="fa-solid fa-spinner fa-spin"></i> 수신 대기중</span>`;
+    const cam = allCctvs.find(c => c.id === camId);
+    if (!cam || !cam.live_status) {
+        return `<span class="seg-pill waiting"><i class="fa-solid fa-spinner fa-spin"></i> 진단 수신 대기중</span>`;
     }
 
-    const elapsedSec = Math.floor((Date.now() - lastTime) / 1000);
+    const status = cam.live_status;
+    
+    // 백엔드 체크 시점으로부터 흐른 시간(초) 계산
+    const diffSec = Math.floor(Date.now() / 1000) - status.checked_at;
+    // 백엔드 감지 나이 + 흐른 시간
+    const elapsedSec = (status.file_age !== null) ? (status.file_age + diffSec) : diffSec;
     const elapsedMin = Math.floor(elapsedSec / 60);
 
-    if (elapsedSec < 120) { // 2분 미만 (정상)
-        return `<span class="seg-pill ok"><i class="fa-solid fa-circle-play"></i> 갱신 ${elapsedSec}초전 (OK)</span>`;
-    } else if (elapsedMin < 5) { // 5분 미만 (지연)
-        return `<span class="seg-pill warning"><i class="fa-solid fa-circle-exclamation"></i> 갱신 ${elapsedMin}분전 (지연)</span>`;
-    } else { // 5분 이상 (장애)
-        return `<span class="seg-pill critical"><i class="fa-solid fa-circle-stop"></i> 갱신 ${elapsedMin}분전 (중단)</span>`;
+    // Nagios 결과 코드 또는 세그먼트 갱신 지연으로 판단
+    if (status.rc === 2 || status.rc === 3 || elapsedSec >= 300) { // CRITICAL/UNKNOWN 또는 5분 이상 갱신 없음 (중단)
+        return `<span class="seg-pill critical"><i class="fa-solid fa-circle-stop"></i> 갱신 ${elapsedMin}분째 (중단)</span>`;
+    } else if (elapsedSec >= 120) { // 2분 이상 (지연)
+        return `<span class="seg-pill warning"><i class="fa-solid fa-circle-exclamation"></i> 갱신 ${elapsedMin}분째 (지연)</span>`;
+    } else { // 정상 (2분 미만)
+        return `<span class="seg-pill ok"><i class="fa-solid fa-circle-play"></i> 갱신 ${elapsedSec}초째 (OK)</span>`;
     }
 }
 
@@ -920,6 +916,9 @@ document.addEventListener('DOMContentLoaded', () => {
     updateStickyOffsets();
     window.addEventListener('resize', updateStickyOffsets);
 
-    // 10초마다 세그먼트 경과 시간 UI 자동 갱신
+    // 10초마다 세그먼트 경과 시간 UI 자동 갱신 (초/분 카운트업)
     setInterval(updateAllSegmentsUI, 10000);
+
+    // 1분(60초)마다 백엔드 상태 최신화 폴링
+    setInterval(loadData, 60000);
 });
