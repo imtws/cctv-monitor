@@ -400,8 +400,8 @@ function renderTable() {
                 <div class="col-category">${cam.category}</div>
                 <div class="col-status"><span class="status-chip">${getStatusMarkup(cam.status)}</span></div>
                 <div class="col-actions">
-                    <button class="btn btn-primary" onclick="openItemSettingsModal('${cam.id}')" style="padding: 4px 8px; font-size: 0.75rem;" title="설정"><i class="fa-solid fa-gear"></i></button>
-                    <button class="btn" onclick="openModal('${cam.id}', '${cam.category}', '${streamUrl}')" style="padding: 4px 8px; font-size: 0.75rem;" title="확대"><i class="fa-solid fa-expand"></i></button>
+                    <button class="btn btn-primary" onclick="openItemSettingsModal('${cam.id}')" title="설정"><i class="fa-solid fa-gear"></i></button>
+                    <button class="btn" onclick="openModal('${cam.id}', '${cam.category}', '${streamUrl}')" title="확대"><i class="fa-solid fa-expand"></i></button>
                     <button class="btn list-toggle" onclick="toggleListRow('${cam.id}')" title="펼치기/접기"><i class="fa-solid ${listExpandedIds.has(cam.id) ? 'fa-chevron-up' : 'fa-chevron-down'}"></i></button>
                 </div>
             </div>
