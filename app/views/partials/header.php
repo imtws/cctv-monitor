@@ -10,6 +10,6 @@
             <button id="btn-card-view" class="switch-btn active" onclick="setViewMode('card')"><i class="fa-solid fa-border-all"></i> 카드</button>
             <button id="btn-list-view" class="switch-btn" onclick="setViewMode('list')"><i class="fa-solid fa-list"></i> 리스트</button>
         </div>
-        <button class="btn" onclick="openBatchSettingsModal()"><i class="fa-solid fa-layer-group"></i> 일괄 설정</button>
+        <button class="btn" onclick="openBatchSettingsModal()"><i class="fa-solid fa-gear"></i> 일괄 설정</button>
     </div>
 </header>
