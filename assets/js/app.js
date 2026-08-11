@@ -416,8 +416,7 @@ function renderTable() {
                         </div>
                         <div class="list-detail-mini">
                             <div class="detail-card"><label>상태</label><div class="value">${escapeHtml(getStatusLabel(cam.status))}</div></div>
-                            <div class="detail-card"><label>스케줄</label><div class="value small">${escapeHtml(cam.alert_start || '08:00')} ~ ${escapeHtml(cam.alert_end || '18:00')}</div></div>
-                            <div class="detail-card"><label>알림</label><div class="value small">${cam.alert_enabled ? '사용' : '미사용'}</div></div>
+                            ${(() => { const sup = cam.suppress_until ? new Date(cam.suppress_until) : null; if (sup && sup > new Date()) { return `<div class="detail-card" style="border-color:rgba(245,158,11,0.4);"><label style="color:#f59e0b;">스케줄</label><div class="value small" style="color:#f59e0b;">스케줄~${sup.toLocaleString('ko-KR', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div></div>`; } return ''; })()}
                             <div class="detail-card"><label>DDNS</label><div class="value small">
                                 ${getSafeExternalUrl(cam.ddns)
                                     ? `<a href="${escapeHtml(cam.ddns)}" target="_blank" rel="noopener noreferrer" style="color:#93c5fd; text-decoration:underline;">${escapeHtml(cam.ddns)}</a>`
@@ -462,19 +461,17 @@ function getStatusMarkup(s) {
 }
 
 function getScheduleMarkup(cam) {
-    const enabled = cam.alert_enabled ? 'ON' : 'OFF';
-    const start   = cam.alert_start || '08:00';
-    const end     = cam.alert_end   || '18:00';
-    return `
-        <span class="schedule-pill ${cam.alert_enabled ? 'enabled' : 'disabled'}">
-            <i class="fa-solid fa-bell"></i>
-            <span>${enabled}</span>
-        </span>
-        <span class="schedule-pill">
-            <i class="fa-regular fa-clock"></i>
-            <span>${escapeHtml(start)}~${escapeHtml(end)}</span>
-        </span>
-    `;
+    const now = new Date();
+    const sup = cam.suppress_until ? new Date(cam.suppress_until) : null;
+    const isScheduled = sup && sup > now;
+
+    if (!isScheduled) return '';
+
+    const untilStr = sup.toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    return `<span class="schedule-pill suppressed" title="알람 스케줄: ${sup.toLocaleString('ko-KR')}까지">
+        <i class="fa-regular fa-clock"></i>
+        <span>스케줄~${escapeHtml(untilStr)}</span>
+    </span>`;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -598,11 +595,7 @@ function closeSettingsDrawer() {
 
 function getCameraSummary(cam) {
     if (!cam) return '';
-    return [
-        `상태: ${getStatusLabel(cam.status)}`,
-        `알람: ${cam.alert_enabled ? '사용' : '미사용'}`,
-        `발송시간: ${cam.alert_start || '08:00'} ~ ${cam.alert_end || '18:00'}`
-    ].join(' · ');
+    return `상태: ${getStatusLabel(cam.status)}`;
 }
 
 function renderSettingsDrawer() {
@@ -618,8 +611,8 @@ function renderSettingsDrawer() {
         ? (primaryCam ? `개별 설정 - ${primaryCam.id.toUpperCase()}` : '개별 설정')
         : '일괄 설정';
     summary.textContent = settingsDrawerMode === 'single'
-        ? (primaryCam ? `${primaryCam.stadium} · ${primaryCam.category}` : '선택한 카메라의 상태와 알람 발송 시간을 수정합니다.')
-        : `${cams.length}개 카메라의 상태와 알람 발송 시간을 한 번에 수정합니다.`;
+        ? (primaryCam ? `${primaryCam.stadium} · ${primaryCam.category}` : '선택한 카메라의 상태와 알람 스케줄을 수정합니다.')
+        : `${cams.length}개 카메라의 상태와 알람 스케줄을 한 번에 수정합니다.`;
 
     content.innerHTML = `
         <section class="drawer-section">
@@ -635,20 +628,7 @@ function renderSettingsDrawer() {
             </div>
         </section>
         <section class="drawer-section">
-            <div class="drawer-section-title">알람 발송 시간</div>
-            <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; margin-bottom:12px;">
-                <input type="checkbox" id="settings-enabled">
-                <span>알림 사용</span>
-            </label>
-            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
-                <input type="time" class="text-input" id="settings-start" value="08:00" style="flex:1; min-width: 120px;">
-                <span>~</span>
-                <input type="time" class="text-input" id="settings-end" value="18:00" style="flex:1; min-width: 120px;">
-            </div>
-            <button class="btn btn-primary" onclick="applyDrawerSchedule()" style="width:100%; justify-content:center;">발송 시간 저장</button>
-        </section>
-        <section class="drawer-section">
-            <div class="drawer-section-title">알람 스케줄 <span style="font-size:0.75rem;font-weight:400;color:var(--text-sub);">지정 기간 동안 알람 억제</span></div>
+            <div class="drawer-section-title">알람 스케줄 <span style="font-size:0.75rem;font-weight:400;color:var(--text-sub);">지정 기간 동안 알람 발송 중지</span></div>
             <div class="suppress-quick-btns" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
                 <button class="btn btn-sm" onclick="setSuppressQuick(1)">+1h</button>
                 <button class="btn btn-sm" onclick="setSuppressQuick(2)">+2h</button>
@@ -681,14 +661,8 @@ function renderSettingsDrawer() {
             `).join('');
     }
 
-    const enabledEl    = document.getElementById('settings-enabled');
-    const startEl      = document.getElementById('settings-start');
-    const endEl        = document.getElementById('settings-end');
     const suppressEl   = document.getElementById('settings-suppress-until');
     const suppressInfo = document.getElementById('suppress-current-info');
-    if (enabledEl) enabledEl.checked = primaryCam ? primaryCam.alert_enabled !== false : true;
-    if (startEl)   startEl.value    = primaryCam ? (primaryCam.alert_start || '08:00') : '08:00';
-    if (endEl)     endEl.value      = primaryCam ? (primaryCam.alert_end   || '18:00') : '18:00';
     if (suppressEl) {
         suppressEl.value = '';
         const sup = primaryCam?.suppress_until;
@@ -696,35 +670,24 @@ function renderSettingsDrawer() {
             const d = new Date(sup);
             const now = new Date();
             if (d > now) {
-                suppressInfo.innerHTML = `<i class="fa-solid fa-clock" style="color:#f59e0b;"></i> 현재 억제 중: <strong>${d.toLocaleString('ko-KR')}</strong> 까지`;
+                suppressInfo.innerHTML = `<i class="fa-regular fa-clock" style="color:#f59e0b;"></i> 스케줄 적용 중: <strong>${d.toLocaleString('ko-KR')}</strong> 까지`;
             } else {
-                suppressInfo.textContent = '억제 없음 (또는 만료)';
+                suppressInfo.textContent = '스케줄 없음 (또는 만료)';
             }
         } else if (suppressInfo) {
-            suppressInfo.textContent = '억제 없음';
+            suppressInfo.textContent = '스케줄 없음';
         }
     }
 }
 
-function collectDrawerPayload() {
-    return {
-        mode:    settingsDrawerMode,
-        ids:     [...settingsDrawerIds],
-        enabled: document.getElementById('settings-enabled')?.checked ?? null,
-        start:   document.getElementById('settings-start')?.value   ?? '',
-        end:     document.getElementById('settings-end')?.value     ?? ''
-    };
-}
+
 
 function applyLocalDrawerUpdate(payload) {
     const ids = new Set(payload.ids);
     allCctvs = allCctvs.map(cam => {
         if (!ids.has(cam.id)) return cam;
         const next = { ...cam };
-        if (payload.status)         next.status        = payload.status;
-        if (payload.enabled !== null) next.alert_enabled = payload.enabled;
-        if (payload.start)          next.alert_start   = payload.start;
-        if (payload.end)            next.alert_end     = payload.end;
+        if (payload.status) next.status = payload.status;
         return next;
     });
 }
@@ -735,14 +698,10 @@ function buildDrawerConfirmMessage(payload, kind) {
     if (kind === 'status') {
         return `아래 카메라의 상태를 ${getStatusLabel(payload.status)}로 변경합니다.\n\n${lines}`;
     }
-    if (kind === 'schedule') {
-        const alertLine = `알람: ${payload.enabled ? '사용' : '미사용'} / ${payload.start} ~ ${payload.end}`;
-        return `아래 카메라의 알람 발송 시간을 저장합니다.\n\n${lines}\n\n${alertLine}`;
-    }
     if (kind === 'suppress') {
         const until = payload.suppress_until
-            ? `${new Date(payload.suppress_until).toLocaleString('ko-KR')} 까지 억제`
-            : `억제 해제 (즉시 발송 재개)`;
+            ? `${new Date(payload.suppress_until).toLocaleString('ko-KR')} 까지 스케줄`
+            : `스케줄 해제 (즉시 발송 재개)`;
         return `아래 카메라의 알람 스케줄을 설정합니다.\n\n${lines}\n\n${until}`;
     }
     return `설정을 저장합니다.\n\n${lines}`;
@@ -773,38 +732,9 @@ async function applyDrawerStatus(status) {
     }
 }
 
-async function applyDrawerSchedule() {
-    const payload = collectDrawerPayload();
-    if (payload.ids.length === 0) { showToast('선택된 카메라가 없습니다.'); return; }
-    if (!window.confirm(buildDrawerConfirmMessage(payload, 'schedule'))) return;
-    try {
-        const res  = await fetch('api.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'batch_update',
-                cam_ids: payload.ids,
-                alert_enabled: payload.enabled,
-                alert_start:   payload.start,
-                alert_end:     payload.end
-            })
-        });
-        const data = await res.json();
-        if (data.success) {
-            applyLocalDrawerUpdate(payload);
-            renderCurrentView();
-            syncMasterSelection();
-            showToast('발송 시간이 저장되었습니다.');
-            closeSettingsDrawer();
-        } else {
-            showToast(data.message || '발송 시간 저장 실패');
-        }
-    } catch (e) {
-        showToast('발송 시간 저장 실패');
-    }
-}
 
-/* 알람 스케줄 (억제) 헬퍼 */
+
+/* 알람 스케줄 헬퍼 */
 function setSuppressQuick(hours) {
     const el = document.getElementById('settings-suppress-until');
     if (!el) return;
@@ -873,7 +803,7 @@ async function applyDrawerSuppressClear() {
     }
 }
 
-async function saveSettingsDrawer() { await applyDrawerSchedule(); }
+
 
 /* ═══════════════════════════════════════════════════════════
    엑셀 업로드
