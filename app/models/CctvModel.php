@@ -80,9 +80,12 @@ class CctvModel
         $updated = false;
         foreach ($cctvs as &$cam) {
             if (trim((string)($cam['id'] ?? '')) === $camId) {
-                if (isset($fields['alert_enabled'])) $cam['alert_enabled'] = (bool)$fields['alert_enabled'];
-                if (isset($fields['alert_start']))   $cam['alert_start']   = $fields['alert_start'];
-                if (isset($fields['alert_end']))     $cam['alert_end']     = $fields['alert_end'];
+                if (isset($fields['alert_enabled']))   $cam['alert_enabled']   = (bool)$fields['alert_enabled'];
+                if (isset($fields['alert_start']))     $cam['alert_start']     = $fields['alert_start'];
+                if (isset($fields['alert_end']))       $cam['alert_end']       = $fields['alert_end'];
+                if (array_key_exists('suppress_until', $fields)) {
+                    $cam['suppress_until'] = $fields['suppress_until'] ?: null;
+                }
                 $updated = true;
                 break;
             }
@@ -91,7 +94,7 @@ class CctvModel
         return $updated && $this->saveCctvs($cctvs);
     }
 
-    public function batchUpdate(array $camIds, ?string $status, ?bool $alertEnabled, ?string $alertStart, ?string $alertEnd): int
+    public function batchUpdate(array $camIds, ?string $status, ?bool $alertEnabled, ?string $alertStart, ?string $alertEnd, ?string $suppressUntil = '__SKIP__'): int
     {
         $cctvs = $this->getAllCctvs();
         $count = 0;
@@ -103,6 +106,9 @@ class CctvModel
             if ($alertEnabled !== null) $cam['alert_enabled'] = $alertEnabled;
             if ($alertStart   !== null) $cam['alert_start']   = $alertStart;
             if ($alertEnd     !== null) $cam['alert_end']     = $alertEnd;
+            if ($suppressUntil !== '__SKIP__') {
+                $cam['suppress_until'] = $suppressUntil ?: null;
+            }
             $count++;
         }
         unset($cam);
@@ -122,11 +128,15 @@ class CctvModel
     public function updateAlertConfig(array $fields, string $defaultRecipient): bool
     {
         $alert = $this->getAlertConfig();
-        if (isset($fields['enabled']))   $alert['enabled']   = (bool)$fields['enabled'];
+        if (isset($fields['enabled']))    $alert['enabled']    = (bool)$fields['enabled'];
         if (isset($fields['start_time'])) $alert['start_time'] = $fields['start_time'];
         if (isset($fields['end_time']))   $alert['end_time']   = $fields['end_time'];
         if (isset($fields['work_days']) && is_array($fields['work_days'])) {
             $alert['work_days'] = array_map('intval', $fields['work_days']);
+        }
+        // 글로벌 알람 스케줄 억제
+        if (array_key_exists('suppress_until', $fields)) {
+            $alert['suppress_until'] = $fields['suppress_until'] ?: null;
         }
         $alert['recipient'] = $defaultRecipient;
         return $this->writeJson($this->alertFile, $alert);

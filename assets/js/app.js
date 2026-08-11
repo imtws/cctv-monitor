@@ -601,7 +601,7 @@ function getCameraSummary(cam) {
     return [
         `상태: ${getStatusLabel(cam.status)}`,
         `알람: ${cam.alert_enabled ? '사용' : '미사용'}`,
-        `스케줄: ${cam.alert_start || '08:00'} ~ ${cam.alert_end || '18:00'}`
+        `발송시간: ${cam.alert_start || '08:00'} ~ ${cam.alert_end || '18:00'}`
     ].join(' · ');
 }
 
@@ -618,8 +618,8 @@ function renderSettingsDrawer() {
         ? (primaryCam ? `개별 설정 - ${primaryCam.id.toUpperCase()}` : '개별 설정')
         : '일괄 설정';
     summary.textContent = settingsDrawerMode === 'single'
-        ? (primaryCam ? `${primaryCam.stadium} · ${primaryCam.category}` : '선택한 카메라의 상태와 알람 스케줄을 수정합니다.')
-        : `${cams.length}개 카메라의 상태와 알람 스케줄을 한 번에 수정합니다.`;
+        ? (primaryCam ? `${primaryCam.stadium} · ${primaryCam.category}` : '선택한 카메라의 상태와 알람 발송 시간을 수정합니다.')
+        : `${cams.length}개 카메라의 상태와 알람 발송 시간을 한 번에 수정합니다.`;
 
     content.innerHTML = `
         <section class="drawer-section">
@@ -635,7 +635,7 @@ function renderSettingsDrawer() {
             </div>
         </section>
         <section class="drawer-section">
-            <div class="drawer-section-title">알람 스케줄</div>
+            <div class="drawer-section-title">알람 발송 시간</div>
             <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; margin-bottom:12px;">
                 <input type="checkbox" id="settings-enabled">
                 <span>알림 사용</span>
@@ -645,7 +645,24 @@ function renderSettingsDrawer() {
                 <span>~</span>
                 <input type="time" class="text-input" id="settings-end" value="18:00" style="flex:1; min-width: 120px;">
             </div>
-            <button class="btn btn-primary" onclick="applyDrawerSchedule()" style="width:100%; justify-content:center;">스케줄 저장</button>
+            <button class="btn btn-primary" onclick="applyDrawerSchedule()" style="width:100%; justify-content:center;">발송 시간 저장</button>
+        </section>
+        <section class="drawer-section">
+            <div class="drawer-section-title">알람 스케줄 <span style="font-size:0.75rem;font-weight:400;color:var(--text-sub);">지정 기간 동안 알람 억제</span></div>
+            <div class="suppress-quick-btns" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+                <button class="btn btn-sm" onclick="setSuppressQuick(1)">+1h</button>
+                <button class="btn btn-sm" onclick="setSuppressQuick(2)">+2h</button>
+                <button class="btn btn-sm" onclick="setSuppressQuick(4)">+4h</button>
+                <button class="btn btn-sm" onclick="setSuppressQuick(8)">+8h</button>
+                <button class="btn btn-sm" onclick="setSuppressQuick(24)">+24h</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                <input type="datetime-local" class="text-input" id="settings-suppress-until" style="flex:1;">
+                <button class="btn" onclick="clearSuppressInput()" title="해제" style="padding:6px 10px;flex-shrink:0;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="suppress-current-info" style="font-size:0.8rem;color:var(--text-sub);margin-bottom:10px;"></div>
+            <button class="btn btn-warning" onclick="applyDrawerSuppress()" style="width:100%;justify-content:center;margin-bottom:6px;">알람 스케줄 저장</button>
+            <button class="btn btn-danger" onclick="applyDrawerSuppressClear()" style="width:100%;justify-content:center;font-size:0.85rem;">스케줄 해제 (즉시 발송 재개)</button>
         </section>
     `;
 
@@ -664,12 +681,29 @@ function renderSettingsDrawer() {
             `).join('');
     }
 
-    const enabledEl = document.getElementById('settings-enabled');
-    const startEl   = document.getElementById('settings-start');
-    const endEl     = document.getElementById('settings-end');
+    const enabledEl    = document.getElementById('settings-enabled');
+    const startEl      = document.getElementById('settings-start');
+    const endEl        = document.getElementById('settings-end');
+    const suppressEl   = document.getElementById('settings-suppress-until');
+    const suppressInfo = document.getElementById('suppress-current-info');
     if (enabledEl) enabledEl.checked = primaryCam ? primaryCam.alert_enabled !== false : true;
     if (startEl)   startEl.value    = primaryCam ? (primaryCam.alert_start || '08:00') : '08:00';
     if (endEl)     endEl.value      = primaryCam ? (primaryCam.alert_end   || '18:00') : '18:00';
+    if (suppressEl) {
+        suppressEl.value = '';
+        const sup = primaryCam?.suppress_until;
+        if (sup && suppressInfo) {
+            const d = new Date(sup);
+            const now = new Date();
+            if (d > now) {
+                suppressInfo.innerHTML = `<i class="fa-solid fa-clock" style="color:#f59e0b;"></i> 현재 억제 중: <strong>${d.toLocaleString('ko-KR')}</strong> 까지`;
+            } else {
+                suppressInfo.textContent = '억제 없음 (또는 만료)';
+            }
+        } else if (suppressInfo) {
+            suppressInfo.textContent = '억제 없음';
+        }
+    }
 }
 
 function collectDrawerPayload() {
@@ -703,7 +737,13 @@ function buildDrawerConfirmMessage(payload, kind) {
     }
     if (kind === 'schedule') {
         const alertLine = `알람: ${payload.enabled ? '사용' : '미사용'} / ${payload.start} ~ ${payload.end}`;
-        return `아래 카메라의 알람 스케줄을 저장합니다.\n\n${lines}\n\n${alertLine}`;
+        return `아래 카메라의 알람 발송 시간을 저장합니다.\n\n${lines}\n\n${alertLine}`;
+    }
+    if (kind === 'suppress') {
+        const until = payload.suppress_until
+            ? `${new Date(payload.suppress_until).toLocaleString('ko-KR')} 까지 억제`
+            : `억제 해제 (즉시 발송 재개)`;
+        return `아래 카메라의 알람 스케줄을 설정합니다.\n\n${lines}\n\n${until}`;
     }
     return `설정을 저장합니다.\n\n${lines}`;
 }
@@ -754,13 +794,82 @@ async function applyDrawerSchedule() {
             applyLocalDrawerUpdate(payload);
             renderCurrentView();
             syncMasterSelection();
-            showToast('스케줄이 저장되었습니다.');
+            showToast('발송 시간이 저장되었습니다.');
             closeSettingsDrawer();
         } else {
-            showToast(data.message || '스케줄 저장 실패');
+            showToast(data.message || '발송 시간 저장 실패');
         }
     } catch (e) {
-        showToast('스케줄 저장 실패');
+        showToast('발송 시간 저장 실패');
+    }
+}
+
+/* 알람 스케줄 (억제) 헬퍼 */
+function setSuppressQuick(hours) {
+    const el = document.getElementById('settings-suppress-until');
+    if (!el) return;
+    const d = new Date(Date.now() + hours * 3600 * 1000);
+    // datetime-local 형식: YYYY-MM-DDTHH:MM
+    const pad = n => String(n).padStart(2, '0');
+    el.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function clearSuppressInput() {
+    const el = document.getElementById('settings-suppress-until');
+    if (el) el.value = '';
+}
+
+async function applyDrawerSuppress() {
+    const ids = [...settingsDrawerIds];
+    if (ids.length === 0) { showToast('선택된 카메라가 없습니다.'); return; }
+    const suppressUntil = document.getElementById('settings-suppress-until')?.value || '';
+    if (!suppressUntil) { showToast('억제 종료 시각을 선택하세요. (빠른 버튼 또는 직접 입력)'); return; }
+    const payload = { ids, suppress_until: suppressUntil };
+    if (!window.confirm(buildDrawerConfirmMessage(payload, 'suppress'))) return;
+    try {
+        const res = await fetch('api.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'update_suppress', scope: 'cam', cam_ids: ids, suppress_until: suppressUntil })
+        });
+        const data = await res.json();
+        if (data.success) {
+            // 로컈 상태 반영
+            const idsSet = new Set(ids);
+            allCctvs = allCctvs.map(cam => idsSet.has(cam.id) ? { ...cam, suppress_until: suppressUntil } : cam);
+            renderCurrentView();
+            showToast('알람 스케줄이 저장되었습니다.');
+            closeSettingsDrawer();
+        } else {
+            showToast(data.message || '저장 실패');
+        }
+    } catch (e) {
+        showToast('저장 실패');
+    }
+}
+
+async function applyDrawerSuppressClear() {
+    const ids = [...settingsDrawerIds];
+    if (ids.length === 0) { showToast('선택된 카메라가 없습니다.'); return; }
+    if (!window.confirm(`선택한 ${ids.length}개 카메라의 알람 스케줄을 해제합니다. (즉시 발송 재개)`)) return;
+    try {
+        const res = await fetch('api.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'update_suppress', scope: 'cam', cam_ids: ids, suppress_until: '' })
+        });
+        const data = await res.json();
+        if (data.success) {
+            const idsSet = new Set(ids);
+            allCctvs = allCctvs.map(cam => idsSet.has(cam.id) ? { ...cam, suppress_until: null } : cam);
+            renderCurrentView();
+            showToast('스케줄이 해제되었습니다.');
+            closeSettingsDrawer();
+        } else {
+            showToast(data.message || '해제 실패');
+        }
+    } catch (e) {
+        showToast('해제 실패');
     }
 }
 

@@ -39,6 +39,9 @@ class CctvController
             case 'update_alert':
                 $this->updateAlert($postData);
                 break;
+            case 'update_suppress':
+                $this->updateSuppress($postData);
+                break;
             case 'upload_excel':
                 $this->uploadExcel($files);
                 break;
@@ -100,14 +103,45 @@ class CctvController
             return;
         }
 
-        $camIds       = array_map(fn($id) => trim((string)$id), $camIds);
-        $status       = $data['status'] ?? null;
-        $alertEnabled = isset($data['alert_enabled']) ? (bool)$data['alert_enabled'] : null;
-        $alertStart   = $data['alert_start'] ?? null;
-        $alertEnd     = $data['alert_end'] ?? null;
+        $camIds        = array_map(fn($id) => trim((string)$id), $camIds);
+        $status        = $data['status'] ?? null;
+        $alertEnabled  = isset($data['alert_enabled']) ? (bool)$data['alert_enabled'] : null;
+        $alertStart    = $data['alert_start'] ?? null;
+        $alertEnd      = $data['alert_end'] ?? null;
+        // suppress_until: 명시적으로 키가 있을 때만 전달 (null = 해제, 문자열 = 설정)
+        $suppressUntil = array_key_exists('suppress_until', $data) ? ($data['suppress_until'] ?: null) : '__SKIP__';
 
-        $count = $this->model->batchUpdate($camIds, $status, $alertEnabled, $alertStart, $alertEnd);
+        $count = $this->model->batchUpdate($camIds, $status, $alertEnabled, $alertStart, $alertEnd, $suppressUntil);
         echo json_encode(['success' => true, 'message' => "Updated {$count} cameras"]);
+    }
+
+    /**
+     * update_suppress: 글로벌 또는 카메라별 suppress_until 설정/해제
+     * body: { scope: 'global'|'cam', cam_ids?: [...], suppress_until: 'YYYY-MM-DDTHH:MM' | '' }
+     */
+    private function updateSuppress(array $data): void
+    {
+        $scope         = $data['scope'] ?? 'cam';
+        $suppressUntil = $data['suppress_until'] ?? null;  // 빈 문자열이면 해제
+        $suppressUntil = $suppressUntil ?: null;
+
+        if ($scope === 'global') {
+            $ok = $this->model->updateAlertConfig(
+                ['suppress_until' => $suppressUntil],
+                $this->defaultAlertRecipient
+            );
+            $alert = $this->model->getAlertConfig();
+            echo json_encode(['success' => $ok, 'alert' => $alert], JSON_UNESCAPED_UNICODE);
+        } else {
+            $camIds = $data['cam_ids'] ?? [];
+            if (!is_array($camIds) || empty($camIds)) {
+                echo json_encode(['success' => false, 'message' => 'cam_ids required']);
+                return;
+            }
+            $camIds = array_map(fn($id) => trim((string)$id), $camIds);
+            $count  = $this->model->batchUpdate($camIds, null, null, null, null, $suppressUntil);
+            echo json_encode(['success' => true, 'message' => "Suppress updated for {$count} cameras"]);
+        }
     }
 
     private function updateAlert(array $data): void

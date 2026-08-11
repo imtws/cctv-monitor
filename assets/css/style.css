@@ -167,6 +167,7 @@ body.list-mode .list-veil { display: block; }
 .btn-success   { background: var(--active-color);     border-color: var(--active-color); }
 .btn-danger    { background: var(--stopped-color);    border-color: var(--stopped-color); }
 .btn-warning   { background: var(--inspection-color); border-color: var(--inspection-color); }
+.btn-sm        { padding: 4px 10px; font-size: 0.8rem; }
 
 /* ── 폼 컨트롤 ──────────────────────────────────────────── */
 .select-input,
