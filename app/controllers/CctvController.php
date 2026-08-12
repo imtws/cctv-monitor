@@ -8,7 +8,6 @@ require_once __DIR__ . '/../models/CctvModel.php';
 class CctvController
 {
     private CctvModel $model;
-    private string $defaultAlertRecipient = 'stw@example.com';
 
     public function __construct()
     {
@@ -146,7 +145,7 @@ class CctvController
 
     private function updateAlert(array $data): void
     {
-        if ($this->model->updateAlertConfig($data, $this->defaultAlertRecipient)) {
+        if ($this->model->updateAlertConfig($data, 'stw@example.com')) {
             $alert = $this->model->getAlertConfig();
             echo json_encode(['success' => true, 'message' => 'Global alert settings saved', 'alert' => $alert], JSON_UNESCAPED_UNICODE);
         } else {
