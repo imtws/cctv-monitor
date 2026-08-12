@@ -909,6 +909,38 @@ function showToast(msg) {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   모니터링 환경 설정 저장
+   ═══════════════════════════════════════════════════════════ */
+
+function saveEnvSettings() {
+    const emailEl = document.getElementById('settings-email');
+    if (!emailEl) return;
+    const email = emailEl.value.trim();
+    if (!email) {
+        showToast('메일 주소를 입력해주세요.');
+        return;
+    }
+    // 간단 형식 검증
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showToast('올바른 메일 주소 형식이 아닙니다.');
+        return;
+    }
+    const fd = new FormData();
+    fd.append('recipient', email);
+    fetch('api.php?action=update_alert', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alertConfig = data.alert || alertConfig;
+                showToast('수신 메일 주소가 저장되었습니다.');
+            } else {
+                showToast('저장 실패: ' + (data.message || '알 수 없는 오류'));
+            }
+        })
+        .catch(() => showToast('저장 중 오류가 발생했습니다.'));
+}
+
+/* ═══════════════════════════════════════════════════════════
    DOMContentLoaded 초기화
    ═══════════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {

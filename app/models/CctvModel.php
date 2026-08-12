@@ -168,7 +168,12 @@ class CctvModel
         if (array_key_exists('suppress_until', $fields)) {
             $alert['suppress_until'] = $fields['suppress_until'] ?: null;
         }
-        $alert['recipient'] = $defaultRecipient;
+        // recipient: 명시적으로 전달된 경우만 변경, 없으면 기존값 유지
+        if (!empty($fields['recipient'])) {
+            $alert['recipient'] = $fields['recipient'];
+        } elseif (empty($alert['recipient'])) {
+            $alert['recipient'] = $defaultRecipient;
+        }
         return $this->writeJson($this->alertFile, $alert);
     }
 
