@@ -54,7 +54,7 @@ function renderSettingsDrawer() {
         content.innerHTML = `
             <section class="drawer-section">
                 <div class="drawer-section-title"><i class="fa-solid fa-envelope" style="margin-right:6px;"></i>수신 메일 주소</div>
-                <p style="font-size:0.82rem;color:var(--text-sub);margin:8px 0 12px;">NRPE 알람 발송 대상 메일 주소를 설정합니다.</p>
+                <p style="font-size:0.82rem;color:var(--text-sub);margin:8px 0 12px;">캠 모니터링 알람 발송 대상 메일 주소를 설정합니다.</p>
                 <input type="email" class="text-input" id="settings-email"
                     placeholder="example@domain.com"
                     value="${escapeHtml(currentRecipient)}"
