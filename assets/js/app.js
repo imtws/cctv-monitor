@@ -875,11 +875,11 @@ function getSegmentMarkup(camId) {
 
     // Nagios 결과 코드 또는 세그먼트 갱신 지연으로 판단
     if (status.rc === 2 || status.rc === 3 || elapsedSec >= 300) { // CRITICAL/UNKNOWN 또는 5분 이상 갱신 없음 (중단)
-        return `<span class="seg-pill critical"><i class="fa-solid fa-circle-stop"></i> 갱신 ${elapsedMin}분째 (중단)</span>`;
+        return `<span class="seg-pill critical"><i class="fa-solid fa-circle-stop"></i> 비갱신 ${elapsedMin}분째 (중단)</span>`;
     } else if (elapsedSec >= 120) { // 2분 이상 (지연)
-        return `<span class="seg-pill warning"><i class="fa-solid fa-circle-exclamation"></i> 갱신 ${elapsedMin}분째 (지연)</span>`;
+        return `<span class="seg-pill warning"><i class="fa-solid fa-circle-exclamation"></i> 비갱신 ${elapsedMin}분째 (지연)</span>`;
     } else { // 정상 (2분 미만)
-        return `<span class="seg-pill ok"><i class="fa-solid fa-circle-play"></i> 갱신 ${elapsedSec}초째 (OK)</span>`;
+        return `<span class="seg-pill ok"><i class="fa-solid fa-circle-play"></i> 정상 갱신 ${elapsedSec}초째 (OK)</span>`;
     }
 }
 
