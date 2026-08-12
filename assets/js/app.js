@@ -400,6 +400,7 @@ function renderTable() {
                 <div class="col-category">${cam.category}</div>
                 <div class="col-status"><span class="status-chip">${getStatusMarkup(cam.status)}</span></div>
                 <div class="col-actions">
+                    <a href="${cam.ddns}" target="_blank" rel="noopener noreferrer" class="btn" title="DDNS"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>
                     <button class="btn btn-primary" onclick="openItemSettingsModal('${cam.id}')" title="설정"><i class="fa-solid fa-gear"></i></button>
                     <button class="btn" onclick="openModal('${cam.id}', '${cam.category}', '${streamUrl}')" title="확대"><i class="fa-solid fa-expand"></i></button>
                     <button class="btn list-toggle" onclick="toggleListRow('${cam.id}')" title="펼치기/접기"><i class="fa-solid ${listExpandedIds.has(cam.id) ? 'fa-chevron-up' : 'fa-chevron-down'}"></i></button>
@@ -922,3 +923,101 @@ document.addEventListener('DOMContentLoaded', () => {
     // 1분(60초)마다 백엔드 상태 최신화 폴링
     setInterval(loadData, 60000);
 });
+
+/* ═══════════════════════════════════════════════════════════
+   SMS 발송폼 드로어
+   ═══════════════════════════════════════════════════════════ */
+
+function openSmsDrawer() {
+    document.getElementById('sms-drawer').classList.add('open');
+    document.getElementById('sms-drawer-overlay').classList.add('open');
+    document.getElementById('sms-drawer').setAttribute('aria-hidden', 'false');
+    buildSmsForm();
+}
+
+function closeSmsDrawer() {
+    document.getElementById('sms-drawer').classList.remove('open');
+    document.getElementById('sms-drawer-overlay').classList.remove('open');
+    document.getElementById('sms-drawer').setAttribute('aria-hidden', 'true');
+}
+
+function buildSmsForm() {
+    // STOPPED 캠 목록 수집
+    const stopped = allCctvs.filter(c => c.status === 'STOPPED');
+
+    // 제목: 연도 자동 채움 (비어있을 때만)
+    const titleEl = document.getElementById('sms-title-field');
+    if (!titleEl.value.trim()) {
+        const year = new Date().getFullYear();
+        titleEl.value = `${year}년 예시 행사 모니터링`;
+    }
+
+    // 내용 생성
+    const camLines = stopped.map(c => {
+        const id  = c.id  || '';
+        const cat = c.category || '';
+        return `${id} [${cat}]종목 CCTV`;
+    }).join('\n');
+
+    const body = [
+        '안녕하세요. 예시회사 입니다.',
+        '',
+        '-- CCTV 접근 불가 목록 전달 드립니다.',
+        camLines || '(작동 중지 캠 없음)',
+        '',
+        '감사합니다.',
+        '예시회사 드림',
+    ].join('\n');
+
+    document.getElementById('sms-body-field').value = body;
+
+    // 미리보기 목록
+    const listEl = document.getElementById('sms-stopped-list');
+    if (stopped.length === 0) {
+        listEl.innerHTML = `<div class="sms-stopped-empty">작동 중지 처리된 캠이 없습니다.</div>`;
+        return;
+    }
+    listEl.innerHTML = stopped.map(c => `
+        <div class="sms-stopped-item">
+            <span class="si-id">${c.id}</span>
+            <span class="si-cat">${c.category || '-'}</span>
+            <span style="color:var(--text-sub);font-size:0.75rem;white-space:nowrap;">${c.stadium || ''}</span>
+        </div>
+    `).join('');
+}
+
+function copySmsField(fieldId) {
+    const el = document.getElementById(fieldId);
+    if (!el) return;
+
+    // 버튼은 같은 .sms-field-block 내 어딘가 있음 (textarea는 .sms-textarea-wrap 한 단계 더 안쪽)
+    const block = el.closest('.sms-field-block') || el.parentElement?.closest('.sms-field-block');
+    const btn   = block ? block.querySelector('.sms-copy-btn') : null;
+
+    const text = el.value;
+
+    const onSuccess = () => {
+        showToast('복사되었습니다.');
+        if (btn) {
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> 복사됨';
+            btn.classList.add('copied');
+            setTimeout(() => {
+                btn.innerHTML = orig;
+                btn.classList.remove('copied');
+            }, 2000);
+        }
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(onSuccess).catch(() => {
+            el.select();
+            document.execCommand('copy');
+            onSuccess();
+        });
+    } else {
+        el.select();
+        document.execCommand('copy');
+        onSuccess();
+    }
+}

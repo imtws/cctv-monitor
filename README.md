@@ -18,6 +18,8 @@
 - 경기장 정보 엑셀 업로드를 통한 일괄 갱신
 - 실시간 HLS 스트림 팝업 뷰어 (모달)
 - 리스트뷰 행 펼침 → 미리보기 스트림 + 상세 메타 표시
+- **모니터링 문자 발송폼**: 작동 중지 처리된 캠을 자동 취합하여 알림 문자 발송 양식 제공 (복사 기능 및 example SMS 발송 링크 포함)
+- **리스트뷰 내 DDNS 바로가기**: 각 행의 액션 버튼 영역에 DDNS 바로가기 링크 추가
 
 ---
 
@@ -103,6 +105,7 @@
 ### 5.1 상단 헤더 (`partials/header.php`)
 
 - 카드뷰 / 리스트뷰 전환 버튼 (`btn-card-view` / `btn-list-view`)
+- **문자 발송폼** 버튼 (`btn-sms-form`) → 작동 중지 처리된 캠 목록을 기반으로 알림 발송용 텍스트 양식을 자동 생성하는 드로어 오픈
 - 일괄 설정 버튼 → 선택된 항목에 드로어 적용
 
 ### 5.2 툴바 (`partials/toolbar.php`)
@@ -111,10 +114,9 @@
 - 캠 새로고침 버튼 (`loadData()` 호출)
 - 필터 초기화 버튼 (`resetFilters()`)
 - 페이지 범위 필터 (`전체 보기`, `CAM 1~10`, `CAM 11~20` …) — 카메라 `num` 기준 10개 단위
-- 현재 페이지 전체 선택 체크박스 (`select-all-cb`)
-- 상태 필터 드롭다운 (`status-filter`: `ACTIVE` / `STOPPED` / `INSPECTION`)
-- 텍스트 검색 인풋 (`search-input`) — id·num·category·stadium·ddns·상태라벨 전체 검색
-- 경기장 드롭다운 필터 (`stadium-filter`)
+- **공통 필터 영역 (하단 바)**:
+  - 텍스트 검색창 (`search-input`)을 좌측에 넓게 배치하여 입력 가독성 증대
+  - 우측에 경기장 필터 (`stadium-filter`), 상태 필터 (`status-filter`), 현재 페이지 전체 선택 체크박스 (`select-all-cb`) 배치
 
 ### 5.3 카드뷰 (`#card-panel`)
 
@@ -128,6 +130,7 @@
 
 - sticky 헤더 (`list-header`) + 스크롤 베일(`.list-veil`) 처리
 - 행: 체크박스, CAM 번호/경기장/종목 mini-meta, 상태 칩, 작업 버튼
+- **DDNS 바로가기 버튼** 추가: 작업 버튼 영역에서 바로 해당 DDNS 링크로 새 창 이동 가능
 - `꺾쇠` 버튼 → 행 펼침 (`.list-item-group.open`) → HLS 미리보기 + 상세 메타
 - `설정`, `확대` 버튼
 

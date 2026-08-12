@@ -11,28 +11,28 @@
             <div class="filter-group" style="align-items: center;">
                 <div id="paging-buttons" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
             </div>
-            <div class="filter-group" style="align-items: center;">
-                <div class="selection-pill">
-                    <input type="checkbox" id="select-all-cb" onchange="toggleSelectAllVisible()" style="width: 16px; height: 16px; cursor: pointer;">
-                    <label for="select-all-cb" id="select-all-label">현재 페이지 모두 선택</label>
-                    <span class="selection-meta" id="select-all-meta"></span>
-                </div>
-                <select class="select-input" id="status-filter" onchange="applyFilters()">
-                    <option value="">-- 상태 선택 (전체) --</option>
-                    <option value="ACTIVE">경기 진행 중만</option>
-                    <option value="STOPPED">작동 중지만</option>
-                    <option value="INSPECTION">점검중만</option>
-                </select>
-            </div>
         </div>
     </div>
 
-    <div class="toolbar shared-filter-bar">
-        <div class="filter-group">
-            <input type="text" class="text-input" id="search-input" placeholder="카메라/경기장/종목 검색" oninput="applyFilters()">
+    <div class="toolbar shared-filter-bar" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+        <div class="filter-group" style="flex: 1; max-width: 600px; margin-right: 24px;">
+            <input type="text" class="text-input" id="search-input" placeholder="카메라/경기장/종목 검색" oninput="applyFilters()" style="width: 100%;">
+        </div>
+        <div class="filter-group" style="display: flex; gap: 10px; align-items: center; justify-content: flex-end; flex-shrink: 0;">
             <select class="select-input" id="stadium-filter" onchange="applyFilters()">
                 <option value="">-- 경기장 선택 (전체) --</option>
             </select>
+            <select class="select-input" id="status-filter" onchange="applyFilters()">
+                <option value="">-- 상태 선택 (전체) --</option>
+                <option value="ACTIVE">경기 진행 중만</option>
+                <option value="STOPPED">작동 중지만</option>
+                <option value="INSPECTION">점검중만</option>
+            </select>
+            <div class="selection-pill">
+                <input type="checkbox" id="select-all-cb" onchange="toggleSelectAllVisible()" style="width: 16px; height: 16px; cursor: pointer;">
+                <label for="select-all-cb" id="select-all-label">현재 페이지 모두 선택</label>
+                <span class="selection-meta" id="select-all-meta"></span>
+            </div>
         </div>
     </div>
 </div>

@@ -560,3 +560,172 @@ table.cam-table tr:hover { background: rgba(255, 255, 255, 0.03); }
     border-color: rgba(239, 68, 68, 0.25);
 }
 
+/* ── SMS 발송폼 드로어 ──────────────────────────────────── */
+.btn-sms-open {
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.35);
+    color: #60a5fa;
+    font-weight: 600;
+}
+.btn-sms-open:hover {
+    background: rgba(59, 130, 246, 0.22);
+    color: #93c5fd;
+}
+
+.sms-drawer {
+    width: min(520px, 100vw);
+}
+.sms-drawer-body {
+    gap: 16px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.sms-field-block {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.sms-field-block--body {
+    flex: 1;
+}
+.sms-field-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: var(--text-sub);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.sms-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: #60a5fa;
+    font-size: 0.78rem;
+    font-weight: 600;
+    transition: all 0.15s;
+}
+.sms-copy-btn:hover {
+    background: rgba(59, 130, 246, 0.25);
+    color: #93c5fd;
+}
+.sms-copy-btn.copied {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: #34d399;
+}
+
+.sms-text-input {
+    width: 100%;
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    color: var(--text-main);
+    font-family: 'Pretendard', sans-serif;
+    font-size: 0.9rem;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+.sms-text-input:focus {
+    border-color: rgba(59, 130, 246, 0.5);
+}
+
+.sms-textarea-wrap {
+    position: relative;
+    display: flex;
+}
+.sms-textarea {
+    width: 100%;
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    color: var(--text-main);
+    font-family: 'Pretendard', monospace;
+    font-size: 0.875rem;
+    line-height: 1.65;
+    padding: 12px 14px;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.15s;
+    min-height: 220px;
+}
+.sms-textarea:focus {
+    border-color: rgba(59, 130, 246, 0.5);
+}
+
+.sms-stopped-preview {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 12px 14px;
+}
+.sms-stopped-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 160px;
+    overflow-y: auto;
+}
+.sms-stopped-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(255,255,255,0.05);
+    font-size: 0.82rem;
+}
+.sms-stopped-item .si-id {
+    font-family: monospace;
+    color: #60a5fa;
+    font-weight: 700;
+    min-width: 52px;
+}
+.sms-stopped-item .si-cat {
+    color: var(--text-sub);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sms-stopped-empty {
+    padding: 12px;
+    text-align: center;
+    color: var(--text-sub);
+    font-size: 0.83rem;
+    border: 1px dashed rgba(255,255,255,0.1);
+    border-radius: 8px;
+}
+
+.sms-link-block {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    font-size: 0.82rem;
+    color: var(--text-sub);
+}
+.sms-external-link {
+    color: #60a5fa;
+    text-decoration: none;
+    font-weight: 600;
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: color 0.15s;
+}
+.sms-external-link:hover {
+    color: #93c5fd;
+    text-decoration: underline;
+}

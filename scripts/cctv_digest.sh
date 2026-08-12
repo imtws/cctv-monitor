@@ -107,7 +107,7 @@ trap 'rm -rf "$WORKDIR"' EXIT
 
 : > "${WORKDIR}/hostlist.txt"
 
-for cfg in /etc/nagios/objects/Monitor/cam/*.cfg; do
+for cfg in /etc/nagios/objects/Monitor/c7*@example.com/*.cfg; do
     [ -e "$cfg" ] || continue
 
     hn=$(awk '/^[[:space:]]*host_name/{print $2; exit}' "$cfg")
@@ -115,6 +115,9 @@ for cfg in /etc/nagios/objects/Monitor/cam/*.cfg; do
 
     [ -z "$hn" ] && continue
     [ -z "$addr" ] && continue
+
+    # cam 호스트만 (패턴: *-cam-*)
+    [[ "$hn" != *-cam-* ]] && continue
 
     printf '%s\t%s\n' "$hn" "$addr" >> "${WORKDIR}/hostlist.txt"
 done
@@ -456,13 +459,14 @@ send_html_mail() {
     local body="$2"
 
     {
-        echo "To: ${MAIL_TO}"
-        echo "From: ${MAIL_FROM}"
-        echo "Subject: ${subject}"
-        echo "MIME-Version: 1.0"
-        echo "Content-Type: text/html; charset=UTF-8"
-        echo
-        echo "$body"
+        printf 'To: %s\n'              "${MAIL_TO}"
+        printf 'From: %s\n'            "${MAIL_FROM}"
+        printf 'Subject: %s\n'         "${subject}"
+        printf 'MIME-Version: 1.0\n'
+        printf 'Content-Type: text/html; charset=UTF-8\n'
+        printf 'Content-Transfer-Encoding: 8bit\n'
+        printf '\n'
+        printf '%s\n' "${body}"
     } | /usr/sbin/sendmail -t
 }
 

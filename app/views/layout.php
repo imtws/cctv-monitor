@@ -45,6 +45,7 @@
 
         <?php include __DIR__ . '/partials/settings_drawer.php'; ?>
         <?php include __DIR__ . '/partials/modal_player.php'; ?>
+        <?php include __DIR__ . '/partials/sms_drawer.php'; ?>
 
         <div id="toast">저장되었습니다.</div>
     </div>
