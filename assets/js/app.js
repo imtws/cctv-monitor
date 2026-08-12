@@ -975,13 +975,15 @@ function buildSmsForm() {
         const camLines = stopped.map(c => {
             const id  = c.id  || '';
             const cat = c.category || '';
-            return `${id} [${cat}]종목 CCTV`;
+            return `${id} [${cat}] 종목 CCTV`;
         }).join('\n');
 
         body = [
             '안녕하세요. 예시회사 입니다.',
             '',
-            '-- CCTV 접근 불가 목록 전달 드립니다.',
+            'CCTV 접근 불가 목록 전달 드립니다.',
+            '',
+            '[접근 불가 CCTV 종목 리스트]',
             camLines || '(작동 중지 캠 없음)',
             '',
             '감사합니다.',
@@ -991,7 +993,7 @@ function buildSmsForm() {
         const camLines = activeCams.map(c => {
             const id  = c.id  || '';
             const cat = c.category || '';
-            return `${id} [${cat}]종목 CCTV`;
+            return `${id} [${cat}] 종목 CCTV`;
         }).join('\n');
 
         body = [
