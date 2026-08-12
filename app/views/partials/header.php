@@ -49,7 +49,9 @@ function renderSettingsDrawer() {
         : `${cams.length}개 카메라의 상태와 알람 스케줄을 한 번에 수정합니다.`;
 
     // ── 환경 설정 모드: 수신 메일만 표시 ──
+    const footerEl = document.getElementById('settings-drawer-footer');
     if (settingsDrawerMode === 'env') {
+        if (footerEl) footerEl.style.display = 'none';
         const currentRecipient = alertConfig?.recipient || '';
         content.innerHTML = `
             <section class="drawer-section">
@@ -67,6 +69,7 @@ function renderSettingsDrawer() {
         return;
     }
 
+    if (footerEl) footerEl.style.display = 'block';
     // ── 개별 / 일괄 수정 모드 ──
     content.innerHTML = `
         <section class="drawer-section">

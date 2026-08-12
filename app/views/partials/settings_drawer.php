@@ -13,7 +13,7 @@
     <div class="drawer-body">
         <div id="settings-drawer-content"></div>
     </div>
-    <div class="drawer-footer">
+    <div class="drawer-footer" id="settings-drawer-footer">
         변경 대상은 <code>선택된 항목만</code> 적용됩니다. 상태가 <code>STOPPED</code> 또는 <code>INSPECTION</code>이면 알람 경보 대상에서 제외됩니다. <b>알람 스케줄</b>을 설정하면 지정 시각까지 해당 카메라의 메일 발송이 중지됩니다.
     </div>
 </aside>
