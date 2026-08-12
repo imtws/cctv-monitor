@@ -28,6 +28,7 @@ if [ -f "$CCTV_CONFIG" ]; then
 import datetime
 import json
 import os
+import re
 
 now      = datetime.datetime.now()
 now_iso  = now.strftime("%Y-%m-%dT%H:%M")
@@ -39,20 +40,52 @@ g_suppress_until = str(alert.get("suppress_until") or "").strip()
 
 rows = []
 
+# Nagios cfg 파일에서 실제 host_name 자동 매핑 (c7*@example.com 계정 전체 스캔)
+nagios_dir = "/etc/nagios/objects/Monitor"
+num_to_hostname = {}  # cam_num(int) → host_name(str)
+if os.path.isdir(nagios_dir):
+    for account_dir in os.listdir(nagios_dir):
+        account_path = os.path.join(nagios_dir, account_dir)
+        if not os.path.isdir(account_path):
+            continue
+        for cfg_file in os.listdir(account_path):
+            if not cfg_file.endswith(".cfg"):
+                continue
+            m = re.search(r'-cam-(\d+)\.cfg$', cfg_file)
+            if not m:
+                continue
+            num = int(m.group(1))
+            host_name = cfg_file[:-4]  # 확장자 제거
+            # 같은 번호가 여러 계정에 있으면 먼저 발견된 것 사용
+            if num not in num_to_hostname:
+                num_to_hostname[num] = host_name
+
+def resolve_host(c):
+    """cam 번호 기준으로 Nagios 실제 host_name 반환. 없으면 host_name 필드(수동), 그것도 없으면 None."""
+    cam_num = c.get("num")
+    if str(cam_num).isdigit():
+        found = num_to_hostname.get(int(cam_num))
+        if found:
+            return found
+    # fallback: cctv_config의 host_name 필드 (수동 지정)
+    override = str(c.get("host_name") or "").strip()
+    return override if override else None
+
 # 글로벌 suppress_until 확인
 if g_suppress_until and g_suppress_until >= now_iso:
-    # 전체 스케줄: 모든 cam 예외 처리
     for c in cams:
-        cam_id   = str(c.get("id") or "").strip()
-        cam_num  = c.get("num")
-        host_name = f"example-account-cam-{int(cam_num):02d}" if str(cam_num).isdigit() else cam_id
+        cam_id    = str(c.get("id") or "").strip()
+        host_name = resolve_host(c)
+        if not host_name:
+            continue
         rows.append((host_name, cam_id, f"글로벌 스케줄({g_suppress_until}까지)"))
 else:
     for c in cams:
-        cam_id    = str(c.get("id") or "").strip()
-        cam_num   = c.get("num")
-        host_name = f"example-account-cam-{int(cam_num):02d}" if str(cam_num).isdigit() else cam_id
-        status    = str(c.get("status", "ACTIVE") or "ACTIVE").strip()
+        cam_id     = str(c.get("id") or "").strip()
+        host_name  = resolve_host(c)
+        if not host_name:
+            continue
+        status     = str(c.get("status", "ACTIVE") or "ACTIVE").strip()
         c_suppress = str(c.get("suppress_until") or "").strip()
 
         reason = None
