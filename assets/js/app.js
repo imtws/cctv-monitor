@@ -928,10 +928,20 @@ document.addEventListener('DOMContentLoaded', () => {
    SMS 발송폼 드로어
    ═══════════════════════════════════════════════════════════ */
 
+let currentSmsTemplate = 'critical'; // 'critical', 'ok', 'all_ok'
+
 function openSmsDrawer() {
     document.getElementById('sms-drawer').classList.add('open');
     document.getElementById('sms-drawer-overlay').classList.add('open');
     document.getElementById('sms-drawer').setAttribute('aria-hidden', 'false');
+    
+    // 첫 오픈 시 기본 탭 'critical' 강제 활성화
+    const firstTab = document.querySelector('.sms-tab-btn');
+    if (firstTab) {
+        document.querySelectorAll('.sms-tab-btn').forEach(btn => btn.classList.remove('active'));
+        firstTab.classList.add('active');
+    }
+    currentSmsTemplate = 'critical';
     buildSmsForm();
 }
 
@@ -941,9 +951,16 @@ function closeSmsDrawer() {
     document.getElementById('sms-drawer').setAttribute('aria-hidden', 'true');
 }
 
+function setSmsTemplate(templateName, btnEl) {
+    currentSmsTemplate = templateName;
+    document.querySelectorAll('.sms-tab-btn').forEach(btn => btn.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    buildSmsForm();
+}
+
 function buildSmsForm() {
-    // STOPPED 캠 목록 수집
     const stopped = allCctvs.filter(c => c.status === 'STOPPED');
+    const activeCams = allCctvs.filter(c => c.status === 'ACTIVE');
 
     // 제목: 연도 자동 채움 (비어있을 때만)
     const titleEl = document.getElementById('sms-title-field');
@@ -952,22 +969,54 @@ function buildSmsForm() {
         titleEl.value = `${year}년 예시 행사 모니터링`;
     }
 
-    // 내용 생성
-    const camLines = stopped.map(c => {
-        const id  = c.id  || '';
-        const cat = c.category || '';
-        return `${id} [${cat}]종목 CCTV`;
-    }).join('\n');
+    let body = '';
 
-    const body = [
-        '안녕하세요. 예시회사 입니다.',
-        '',
-        '-- CCTV 접근 불가 목록 전달 드립니다.',
-        camLines || '(작동 중지 캠 없음)',
-        '',
-        '감사합니다.',
-        '예시회사 드림',
-    ].join('\n');
+    if (currentSmsTemplate === 'critical') {
+        const camLines = stopped.map(c => {
+            const id  = c.id  || '';
+            const cat = c.category || '';
+            return `${id} [${cat}]종목 CCTV`;
+        }).join('\n');
+
+        body = [
+            '안녕하세요. 예시회사 입니다.',
+            '',
+            '-- CCTV 접근 불가 목록 전달 드립니다.',
+            camLines || '(작동 중지 캠 없음)',
+            '',
+            '감사합니다.',
+            '예시회사 드림',
+        ].join('\n');
+    } else if (currentSmsTemplate === 'ok') {
+        const camLines = activeCams.map(c => {
+            const id  = c.id  || '';
+            const cat = c.category || '';
+            return `${id} [${cat}]종목 CCTV`;
+        }).join('\n');
+
+        body = [
+            '안녕하세요. 예시회사 입니다.',
+            '',
+            '현재 기준 CCTV 정상 출력되는 종목 리스트를 전달드립니다.',
+            '',
+            '[정상 출력 CCTV 종목 리스트]',
+            camLines || '(정상 출력 캠 없음)',
+            '',
+            '나머지 CCTV에 대해서는 종료되어 있는 상태이니 참고 부탁드리겠습니다.',
+            '',
+            '감사합니다.',
+            '예시회사 드림',
+        ].join('\n');
+    } else if (currentSmsTemplate === 'all_ok') {
+        body = [
+            '안녕하세요. 예시회사 입니다.',
+            '',
+            '모든 CCTV 정상 작동 중입니다.',
+            '',
+            '감사합니다.',
+            '예시회사 드림',
+        ].join('\n');
+    }
 
     document.getElementById('sms-body-field').value = body;
 
@@ -985,6 +1034,7 @@ function buildSmsForm() {
         </div>
     `).join('');
 }
+
 
 function copySmsField(fieldId) {
     const el = document.getElementById(fieldId);

@@ -13,6 +13,14 @@
 
     <div class="drawer-body sms-drawer-body">
 
+        <!-- 양식 선택 탭 -->
+        <div class="sms-tabs-group" style="display: flex; gap: 6px; margin-bottom: 8px;">
+            <button class="btn btn-sm sms-tab-btn active" onclick="setSmsTemplate('critical', this)" style="flex:1; justify-content:center;">비정상 리스트</button>
+            <button class="btn btn-sm sms-tab-btn" onclick="setSmsTemplate('ok', this)" style="flex:1; justify-content:center;">정상 리스트</button>
+            <button class="btn btn-sm sms-tab-btn" onclick="setSmsTemplate('all_ok', this)" style="flex:1; justify-content:center;">전체 정상</button>
+        </div>
+
+
         <!-- 제목 폼 -->
         <div class="sms-field-block">
             <div class="sms-field-label">

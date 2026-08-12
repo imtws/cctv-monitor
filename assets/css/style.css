@@ -580,6 +580,13 @@ table.cam-table tr:hover { background: rgba(255, 255, 255, 0.03); }
     flex: 1;
     overflow-y: auto;
 }
+.sms-tab-btn.active {
+    background: var(--primary) !important;
+    border-color: var(--primary) !important;
+    color: #fff !important;
+    font-weight: 700;
+}
+
 
 .sms-field-block {
     display: flex;
