@@ -21,6 +21,59 @@ if [ -f "$ALERT_CONFIG" ]; then
     if [ "$GLOBAL_ENABLED" = "False" ]; then
         exit 0
     fi
+
+    # 비활성화 시간 체크: 현재 시각이 허용된 요일/시간대가 아니면 종료
+    IN_SCHEDULE=$(ALERT_CONFIG="$ALERT_CONFIG" python3 - <<'PYIN_SCHEDULE'
+import json, datetime, sys, os
+
+cfg_path = os.environ.get('ALERT_CONFIG', '/home/www/cammon/data/alert_config.json')
+try:
+    cfg = json.load(open(cfg_path))
+except Exception:
+    print("true")
+    sys.exit(0)
+
+start_time_str = str(cfg.get('start_time') or '').strip()
+end_time_str   = str(cfg.get('end_time')   or '').strip()
+work_days      = cfg.get('work_days', None)
+
+# start_time/end_time 또는 work_days 가 설정되지 않으면 항상 허용
+if not start_time_str and not end_time_str and work_days is None:
+    print("true")
+    sys.exit(0)
+
+now = datetime.datetime.now()
+current_weekday = now.weekday()  # 0=월, 6=일
+# Python weekday: 0=월~6=일 → JSON work_days: 0=일,1=월~6=토 (JS 기준)
+js_weekday = (current_weekday + 1) % 7  # JS 기준으로 변환
+
+# 요일 체크
+if work_days is not None:
+    work_days_int = [int(d) for d in work_days]
+    if js_weekday not in work_days_int:
+        print("false")
+        sys.exit(0)
+
+# 시간 범위 체크
+if start_time_str and end_time_str:
+    try:
+        s_h, s_m = [int(x) for x in start_time_str.split(':')]
+        e_h, e_m = [int(x) for x in end_time_str.split(':')]
+        start_minutes = s_h * 60 + s_m
+        end_minutes   = e_h * 60 + e_m
+        now_minutes   = now.hour * 60 + now.minute
+        if now_minutes < start_minutes or now_minutes >= end_minutes:
+            print("false")
+            sys.exit(0)
+    except Exception:
+        pass
+
+print("true")
+PYIN_SCHEDULE
+    )
+    if [ "$IN_SCHEDULE" = "false" ]; then
+        exit 0
+    fi
 fi
 
 if [ -f "$CCTV_CONFIG" ]; then
@@ -40,9 +93,9 @@ g_suppress_until = str(alert.get("suppress_until") or "").strip()
 
 rows = []
 
-# Nagios cfg 파일에서 실제 host_name 자동 매핑 (c7*@example.com 계정 전체 스캔)
+# Nagios cfg 파일에서 실제 host_name 자동 매핑 (c*@example.com 계정 전체 스캔)
 nagios_dir = "/etc/nagios/objects/Monitor"
-num_to_hostname = {}  # cam_num(int) → host_name(str)
+num_to_hostnames = {}  # cam_num(int) → list of host_names [str, ...]
 if os.path.isdir(nagios_dir):
     for account_dir in os.listdir(nagios_dir):
         account_path = os.path.join(nagios_dir, account_dir)
@@ -56,35 +109,32 @@ if os.path.isdir(nagios_dir):
                 continue
             num = int(m.group(1))
             host_name = cfg_file[:-4]  # 확장자 제거
-            # 같은 번호가 여러 계정에 있으면 먼저 발견된 것 사용
-            if num not in num_to_hostname:
-                num_to_hostname[num] = host_name
+            if num not in num_to_hostnames:
+                num_to_hostnames[num] = []
+            num_to_hostnames[num].append(host_name)
 
-def resolve_host(c):
-    """cam 번호 기준으로 Nagios 실제 host_name 반환. 없으면 host_name 필드(수동), 그것도 없으면 None."""
+def resolve_hosts(c):
+    """cam 번호 기준으로 Nagios 실제 host_names 리스트 반환. 없으면 host_name 필드(수동) fallback."""
     cam_num = c.get("num")
     if str(cam_num).isdigit():
-        found = num_to_hostname.get(int(cam_num))
+        found = num_to_hostnames.get(int(cam_num))
         if found:
             return found
     # fallback: cctv_config의 host_name 필드 (수동 지정)
     override = str(c.get("host_name") or "").strip()
-    return override if override else None
+    return [override] if override else []
 
 # 글로벌 suppress_until 확인
 if g_suppress_until and g_suppress_until >= now_iso:
     for c in cams:
-        cam_id    = str(c.get("id") or "").strip()
-        host_name = resolve_host(c)
-        if not host_name:
-            continue
-        rows.append((host_name, cam_id, f"글로벌 스케줄({g_suppress_until}까지)"))
+        cam_id = str(c.get("id") or "").strip()
+        hosts  = resolve_hosts(c)
+        for host_name in hosts:
+            rows.append((host_name, cam_id, f"글로벌 스케줄({g_suppress_until}까지)"))
 else:
     for c in cams:
         cam_id     = str(c.get("id") or "").strip()
-        host_name  = resolve_host(c)
-        if not host_name:
-            continue
+        hosts      = resolve_hosts(c)
         status     = str(c.get("status", "ACTIVE") or "ACTIVE").strip()
         c_suppress = str(c.get("suppress_until") or "").strip()
 
@@ -97,7 +147,8 @@ else:
             reason = f"스케줄({c_suppress}까지)"
 
         if reason:
-            rows.append((host_name, cam_id, reason))
+            for host_name in hosts:
+                rows.append((host_name, cam_id, reason))
 
 for host_name, cam_id, reason in rows:
     print(f"{host_name}\t{cam_id}\t{reason}")
@@ -140,7 +191,7 @@ trap 'rm -rf "$WORKDIR"' EXIT
 
 : > "${WORKDIR}/hostlist.txt"
 
-for cfg in /etc/nagios/objects/Monitor/c7*@example.com/*.cfg; do
+for cfg in /etc/nagios/objects/Monitor/c*@example.com/*.cfg; do
     [ -e "$cfg" ] || continue
 
     hn=$(awk '/^[[:space:]]*host_name/{print $2; exit}' "$cfg")
@@ -245,7 +296,7 @@ if results_path and os.path.exists(results_path):
                 hn, rc, out = parts[0], parts[1], parts[2]
                 
                 file_age = None
-                age_match = re.search(r'file_age=(\d+)', out)
+                age_match = re.search(r'(?:file_age|age)=(\d+)', out)
                 if age_match:
                     file_age = int(age_match.group(1))
                 

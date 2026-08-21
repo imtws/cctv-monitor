@@ -44,6 +44,36 @@ class CctvController
             case 'upload_excel':
                 $this->uploadExcel($files);
                 break;
+            case 'get_deploy_info':
+                $this->getDeployInfo();
+                break;
+            case 'save_cctv_ips':
+                $this->saveCctvIps($postData);
+                break;
+            case 'run_ddns_update':
+                $this->runDdnsUpdate();
+                break;
+            case 'rollback_ddns_update':
+                $this->rollbackDdnsUpdate();
+                break;
+            case 'deploy_cctv_info':
+                $this->deployCctvInfo($postData);
+                break;
+            case 'update_ddns_names':
+                $this->updateDdnsNames($postData);
+                break;
+            case 'restart_cctv_relay':
+                $this->restartCctvRelay($postData);
+                break;
+            case 'batch_restart_cctv_relay':
+                $this->batchRestartCctvRelay($postData);
+                break;
+            case 'get_relay_status':
+                $this->getRelayStatus($postData ?: $_GET);
+                break;
+            case 'get_history':
+                $this->getHistory($postData);
+                break;
             default:
                 echo json_encode(['success' => false, 'message' => 'Unknown action']);
         }
@@ -147,7 +177,13 @@ class CctvController
     {
         if ($this->model->updateAlertConfig($data, 'stw@example.com')) {
             $alert = $this->model->getAlertConfig();
-            echo json_encode(['success' => true, 'message' => 'Global alert settings saved', 'alert' => $alert], JSON_UNESCAPED_UNICODE);
+            $trafficSync = $this->model->syncTrafficCron();
+            echo json_encode([
+                'success'      => true,
+                'message'      => 'Global alert settings saved',
+                'alert'        => $alert,
+                'traffic_sync' => $trafficSync,
+            ], JSON_UNESCAPED_UNICODE);
         } else {
             echo json_encode(['success' => false, 'message' => 'Failed to save alert config']);
         }
@@ -162,4 +198,134 @@ class CctvController
         $result = $this->model->processExcelUpload($files['excel_file']);
         echo json_encode($result, JSON_UNESCAPED_UNICODE);
     }
+
+    private function getDeployInfo(): void
+    {
+        $cctvs = $this->model->getAllCctvs();
+        $ips = $this->model->getCctvIps();
+        echo json_encode(['success' => true, 'cctvs' => $cctvs, 'ips' => $ips], JSON_UNESCAPED_UNICODE);
+    }
+
+    private function saveCctvIps(array $data): void
+    {
+        $ips = $data['ips'] ?? [];
+        if (!is_array($ips)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid parameters']);
+            return;
+        }
+        $ok = $this->model->saveCctvIps($ips);
+        echo json_encode(['success' => $ok, 'message' => $ok ? 'Saved' : 'Failed to save IPs']);
+    }
+
+    private function runDdnsUpdate(): void
+    {
+        $result = $this->model->runDdnsUpdate();
+        echo json_encode($result, JSON_UNESCAPED_UNICODE);
+    }
+
+    private function rollbackDdnsUpdate(): void
+    {
+        $ok = $this->model->rollbackDdnsUpdate();
+        echo json_encode(['success' => $ok]);
+    }
+
+    private function deployCctvInfo(array $data): void
+    {
+        $pendingChanges = $data['pending_changes'] ?? [];
+        $result = $this->model->deployCctvInfo($pendingChanges);
+        echo json_encode($result, JSON_UNESCAPED_UNICODE);
+    }
+
+    private function updateDdnsNames(array $data): void
+    {
+        $ddnsMap = $data['ddns_map'] ?? [];
+        if (!is_array($ddnsMap)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid parameters']);
+            return;
+        }
+        $result = $this->model->updateDdnsNames($ddnsMap);
+        echo json_encode($result, JSON_UNESCAPED_UNICODE);
+    }
+
+    private function getHistory(array $data): void
+    {
+        $filters = [
+            'type'      => $data['type']      ?? '',
+            'status'    => $data['status']    ?? '',
+            'date_from' => $data['date_from'] ?? '',
+            'date_to'   => $data['date_to']   ?? '',
+        ];
+        $history = $this->model->getHistory($filters);
+        echo json_encode(['success' => true, 'history' => $history], JSON_UNESCAPED_UNICODE);
+    }
+
+    private function restartCctvRelay(array $data): void
+    {
+        $camId = trim((string)($data['cam_id'] ?? ''));
+        if (!$camId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Cam ID']);
+            return;
+        }
+        $isBatch = isset($data['is_batch']) ? (bool)$data['is_batch'] : false;
+
+        $result = $this->model->restartCctvRelay($camId, !$isBatch);
+        echo json_encode($result, JSON_UNESCAPED_UNICODE);
+    }
+
+    private function batchRestartCctvRelay(array $data): void
+    {
+        $results = $data['results'] ?? [];
+        if (!is_array($results) || empty($results)) {
+            echo json_encode(['success' => false, 'message' => 'No results to log']);
+            return;
+        }
+
+        // 전체 결과 중 성공 및 실패 개수 파악
+        $total = count($results);
+        $successCount = 0;
+        $failCount = 0;
+        $failedCams = [];
+
+        foreach ($results as $r) {
+            // verified가 true이거나 success가 true인 경우 성공 판정 (JS와 동치)
+            $ok = ($r['verified'] ?? false) || ($r['success'] ?? false);
+            if ($ok) {
+                $successCount++;
+            } else {
+                $failCount++;
+                $failedCams[] = strtoupper($r['cam_id'] ?? '');
+            }
+        }
+
+        $status = ($failCount === 0) ? 'success' : (($successCount > 0) ? 'partial' : 'fail');
+        $camsStr = implode(', ', array_map(fn($r) => strtoupper($r['cam_id'] ?? ''), $results));
+
+        $this->model->saveHistory(
+            'cctv_relay_restart',
+            "캠 서버 일괄 재기동 ({$total}대: {$camsStr})",
+            $status,
+            [
+                'total' => $total,
+                'success' => $successCount,
+                'fail' => $failCount,
+                'failed_cams' => $failedCams,
+                'results' => $results
+            ]
+        );
+
+        echo json_encode(['success' => true]);
+    }
+
+    private function getRelayStatus(array $data): void
+    {
+        $camId = trim((string)($data['cam_id'] ?? ''));
+        if (!$camId) {
+            echo json_encode(['success' => false, 'message' => 'Invalid Cam ID']);
+            return;
+        }
+
+        $result = $this->model->getCctvRelayStatus($camId);
+        echo json_encode($result, JSON_UNESCAPED_UNICODE);
+    }
 }
+

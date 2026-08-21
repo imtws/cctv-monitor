@@ -1,6 +1,10 @@
 # 데이터 파일 (운영환경 민감 정보)
 data/cctv_config.json
 data/alert_config.json
+data/cctv_ips.json
+data/action_history.json
+data/traffic_cron_state
+data/traffic_cron_sync.log
 
 # Python
 __pycache__/

@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>예시 행사 CCTV 트래픽 모니터링</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px 16px 40px; font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; background: #f1f5f9; color: #0f172a; }
+    h1 { margin: 0 0 8px; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; text-align: center; }
+    .sub { margin: 0 0 20px; text-align: center; color: #64748b; font-size: 0.9rem; }
+    table { width: 100%; max-width: 1100px; margin: 0 auto; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 8px 24px rgba(15,23,42,0.08); }
+    th, td { border: 1px solid #e2e8f0; padding: 10px 12px; text-align: center; vertical-align: middle; }
+    th { background: #0f172a; color: #f8fafc; font-size: 0.85rem; }
+    td.stadium { background: #f8fafc; font-weight: 700; font-size: 0.88rem; white-space: nowrap; }
+    td.num { width: 56px; color: #64748b; font-weight: 700; }
+    td.cat { text-align: left; white-space: nowrap; font-weight: 600; }
+    td.traffic img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+    tr:nth-child(even) td.cat, tr:nth-child(even) td.num, tr:nth-child(even) td.traffic { background: #fafbfc; }
+  </style>
+</head>
+<body>
+  <h1>각 장비별 Traffic 모니터링</h1>
+  <p class="sub">예시 행사 CCTV 캠 서버별 트래픽 현황</p>
+  <table>
+    <thead>
+      <tr><th style="width:18%">경기장</th><th style="width:8%">번호</th><th style="width:18%">경기직종</th><th>트래픽</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="stadium" rowspan="9">인천기계공업고등학교 (제1경기장)</td>
+        <td class="num">1</td>
+        <td class="cat">금형</td>
+        <td class="traffic"><img src="http://cam01.example.com:8080/traffic/summary.png" alt="cam01 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">2</td>
+        <td class="cat">기계설계/CAD</td>
+        <td class="traffic"><img src="http://cam02.example.com:8080/traffic/summary.png" alt="cam02 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">3</td>
+        <td class="cat">CNC/밀링</td>
+        <td class="traffic"><img src="http://cam03.example.com:8080/traffic/summary.png" alt="cam03 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">4</td>
+        <td class="cat">CNC/선반</td>
+        <td class="traffic"><img src="http://cam04.example.com:8080/traffic/summary.png" alt="cam04 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">5</td>
+        <td class="cat">주조</td>
+        <td class="traffic"><img src="http://cam05.example.com:8080/traffic/summary.png" alt="cam05 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">6</td>
+        <td class="cat">자동차정비</td>
+        <td class="traffic"><img src="http://cam06.example.com:8080/traffic/summary.png" alt="cam06 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">7</td>
+        <td class="cat">전기제어</td>
+        <td class="traffic"><img src="http://cam07.example.com:8080/traffic/summary.png" alt="cam07 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">8</td>
+        <td class="cat">건축설계/CAD</td>
+        <td class="traffic"><img src="http://cam08.example.com:8080/traffic/summary.png" alt="cam08 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">9</td>
+        <td class="cat">게임개발</td>
+        <td class="traffic"><img src="http://cam09.example.com:8080/traffic/summary.png" alt="cam09 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="stadium" rowspan="7">부평공업고등학교 (제2경기장)</td>
+        <td class="num">1</td>
+        <td class="cat">냉동기술</td>
+        <td class="traffic"><img src="http://cam10.example.com:8080/traffic/summary.png" alt="cam10 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">2</td>
+        <td class="cat">전기기기</td>
+        <td class="traffic"><img src="http://cam11.example.com:8080/traffic/summary.png" alt="cam11 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">3</td>
+        <td class="cat">웹디자인 및 개발</td>
+        <td class="traffic"><img src="http://cam12.example.com:8080/traffic/summary.png" alt="cam12 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">4</td>
+        <td class="cat">그래픽디자인</td>
+        <td class="traffic"><img src="http://cam13.example.com:8080/traffic/summary.png" alt="cam13 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">5</td>
+        <td class="cat">제품디자인</td>
+        <td class="traffic"><img src="http://cam14.example.com:8080/traffic/summary.png" alt="cam14 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">6</td>
+        <td class="cat">귀금속공예</td>
+        <td class="traffic"><img src="http://cam15.example.com:8080/traffic/summary.png" alt="cam15 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">7</td>
+        <td class="cat">보석가공</td>
+        <td class="traffic"><img src="http://cam16.example.com:8080/traffic/summary.png" alt="cam16 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="stadium" rowspan="5">인천소방고등학교 (제3경기장)</td>
+        <td class="num">1</td>
+        <td class="cat">용접</td>
+        <td class="traffic"><img src="http://cam17.example.com:8080/traffic/summary.png" alt="cam17 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">2</td>
+        <td class="cat">모바일로보틱스</td>
+        <td class="traffic"><img src="http://cam18.example.com:8080/traffic/summary.png" alt="cam18 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">3</td>
+        <td class="cat">애니메이션</td>
+        <td class="traffic"><img src="http://cam19.example.com:8080/traffic/summary.png" alt="cam19 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">4</td>
+        <td class="cat">클라우드컴퓨팅</td>
+        <td class="traffic"><img src="http://cam20.example.com:8080/traffic/summary.png" alt="cam20 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">5</td>
+        <td class="cat">모바일앱개발</td>
+        <td class="traffic"><img src="http://cam21.example.com:8080/traffic/summary.png" alt="cam21 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="stadium" rowspan="3">인천전자마이스터고등학교 (제4경기장)</td>
+        <td class="num">1</td>
+        <td class="cat">공업전자기기</td>
+        <td class="traffic"><img src="http://cam22.example.com:8080/traffic/summary.png" alt="cam22 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">2</td>
+        <td class="cat">정보기술</td>
+        <td class="traffic"><img src="http://cam23.example.com:8080/traffic/summary.png" alt="cam23 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">3</td>
+        <td class="cat">사이버보안</td>
+        <td class="traffic"><img src="http://cam24.example.com:8080/traffic/summary.png" alt="cam24 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="stadium" rowspan="6">재능대학교 송도캠퍼스 (제5경기장)</td>
+        <td class="num">1</td>
+        <td class="cat">산업용드론제어</td>
+        <td class="traffic"><img src="http://cam25.example.com:8080/traffic/summary.png" alt="cam25 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">2</td>
+        <td class="cat">배관</td>
+        <td class="traffic"><img src="http://cam26.example.com:8080/traffic/summary.png" alt="cam26 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">3</td>
+        <td class="cat">자동차차체수리</td>
+        <td class="traffic"><img src="http://cam27.example.com:8080/traffic/summary.png" alt="cam27 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">4</td>
+        <td class="cat">자동차페인팅</td>
+        <td class="traffic"><img src="http://cam28.example.com:8080/traffic/summary.png" alt="cam28 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">5</td>
+        <td class="cat">농업기계정비</td>
+        <td class="traffic"><img src="http://cam29.example.com:8080/traffic/summary.png" alt="cam29 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">6</td>
+        <td class="cat">판금철골구조물</td>
+        <td class="traffic"><img src="http://cam30.example.com:8080/traffic/summary.png" alt="cam30 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="stadium" rowspan="20">송도 컨벤시아 (제6경기장)</td>
+        <td class="num">1</td>
+        <td class="cat">폴리메카닉스</td>
+        <td class="traffic"><img src="http://cam31.example.com:8080/traffic/summary.png" alt="cam31 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">2</td>
+        <td class="cat">프로토타입모델링</td>
+        <td class="traffic"><img src="http://cam32.example.com:8080/traffic/summary.png" alt="cam32 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">3</td>
+        <td class="cat">산업제어</td>
+        <td class="traffic"><img src="http://cam33.example.com:8080/traffic/summary.png" alt="cam33 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">4</td>
+        <td class="cat">통신망분배기술</td>
+        <td class="traffic"><img src="http://cam34.example.com:8080/traffic/summary.png" alt="cam34 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">5</td>
+        <td class="cat">메카트로닉스</td>
+        <td class="traffic"><img src="http://cam35.example.com:8080/traffic/summary.png" alt="cam35 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">6</td>
+        <td class="cat">산업용로봇</td>
+        <td class="traffic"><img src="http://cam36.example.com:8080/traffic/summary.png" alt="cam36 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">7</td>
+        <td class="cat">타일</td>
+        <td class="traffic"><img src="http://cam37.example.com:8080/traffic/summary.png" alt="cam37 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">8</td>
+        <td class="cat">가구</td>
+        <td class="traffic"><img src="http://cam38.example.com:8080/traffic/summary.png" alt="cam38 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">9</td>
+        <td class="cat">실내장식</td>
+        <td class="traffic"><img src="http://cam39.example.com:8080/traffic/summary.png" alt="cam39 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">10</td>
+        <td class="cat">목공</td>
+        <td class="traffic"><img src="http://cam40.example.com:8080/traffic/summary.png" alt="cam40 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">11</td>
+        <td class="cat">목공예</td>
+        <td class="traffic"><img src="http://cam41.example.com:8080/traffic/summary.png" alt="cam41 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">12</td>
+        <td class="cat">의상디자인</td>
+        <td class="traffic"><img src="http://cam42.example.com:8080/traffic/summary.png" alt="cam42 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">13</td>
+        <td class="cat">한복</td>
+        <td class="traffic"><img src="http://cam43.example.com:8080/traffic/summary.png" alt="cam43 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">14</td>
+        <td class="cat">도자기</td>
+        <td class="traffic"><img src="http://cam44.example.com:8080/traffic/summary.png" alt="cam44 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">15</td>
+        <td class="cat">화훼장식</td>
+        <td class="traffic"><img src="http://cam45.example.com:8080/traffic/summary.png" alt="cam45 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">16</td>
+        <td class="cat">헤어디자인</td>
+        <td class="traffic"><img src="http://cam46.example.com:8080/traffic/summary.png" alt="cam46 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">17</td>
+        <td class="cat">요리</td>
+        <td class="traffic"><img src="http://cam47.example.com:8080/traffic/summary.png" alt="cam47 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">18</td>
+        <td class="cat">제과/제빵</td>
+        <td class="traffic"><img src="http://cam48.example.com:8080/traffic/summary.png" alt="cam48 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">19</td>
+        <td class="cat">피부미용</td>
+        <td class="traffic"><img src="http://cam49.example.com:8080/traffic/summary.png" alt="cam49 traffic" loading="lazy"></td>
+      </tr>
+      <tr>
+        <td class="num">20</td>
+        <td class="cat">IT네트워크시스템</td>
+        <td class="traffic"><img src="http://cam50.example.com:8080/traffic/summary.png" alt="cam50 traffic" loading="lazy"></td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>

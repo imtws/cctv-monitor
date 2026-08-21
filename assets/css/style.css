@@ -24,6 +24,7 @@ body {
     color: var(--text-main);
     min-height: 100vh;
     padding-bottom: 40px;
+    overflow-x: hidden; /* 가로 스크롤 생김 방지 */
 }
 
 /* ── 헤더 ───────────────────────────────────────────────── */
@@ -51,6 +52,51 @@ header {
     text-overflow: ellipsis;
 }
 
+.family-site {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 8px;
+    padding-left: 14px;
+    border-left: 1px solid rgba(255,255,255,0.12);
+    flex-shrink: 0;
+}
+.family-site-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-sub);
+    white-space: nowrap;
+    cursor: default;
+}
+.family-site-label i { font-size: 0.75rem; color: #38bdf8; }
+.family-site-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: rgba(15, 23, 42, 0.9) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M3 4.5L6 8l3-3.5'/%3E%3C/svg%3E") no-repeat right 10px center;
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 8px;
+    color: var(--text-main);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 7px 30px 7px 12px;
+    min-width: 132px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s, background 0.15s;
+}
+.family-site-select:hover,
+.family-site-select:focus {
+    border-color: rgba(56, 189, 248, 0.45);
+    background-color: rgba(30, 41, 59, 0.95);
+}
+.family-site-select option {
+    background: #0f172a;
+    color: #f8fafc;
+}
+
 .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 
 /* ── 레이아웃 ───────────────────────────────────────────── */
@@ -63,6 +109,18 @@ header {
     background: #0f172a;
     padding: 0 0 8px;
     margin-bottom: 0;
+}
+/* 검색창 헤더 배경을 가로 전체(Full Width)로 확장하여 스크롤/호버 시 뒤쪽 카드가 삐져나오지 않도록 차단 */
+.top-chrome::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -50vw;
+    right: -50vw;
+    background: #0f172a;
+    z-index: -1;
+    pointer-events: none;
 }
 
 .list-veil {
@@ -163,6 +221,7 @@ body.list-mode .list-veil { display: block; }
     gap: 6px;
 }
 .btn:hover { background: rgba(255, 255, 255, 0.15); }
+.btn.active { background: var(--primary); border-color: var(--primary); color: #fff; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3); }
 .btn-primary   { background: var(--primary);          border-color: var(--primary); }
 .btn-success   { background: var(--active-color);     border-color: var(--active-color); }
 .btn-danger    { background: var(--stopped-color);    border-color: var(--stopped-color); }
@@ -182,14 +241,29 @@ body.list-mode .list-veil { display: block; }
 }
 
 /* ── 카드 뷰 ────────────────────────────────────────────── */
-.video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
+.video-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px;
+    padding-top: 10px; /* 여백 확보로 상단 짤림 방지 */
+}
 .video-card {
+    cursor: pointer;
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     border-radius: 12px;
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    position: relative;
+    z-index: 1;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease, border-color 0.25s ease, z-index 0s;
+}
+.video-card:hover {
+    transform: translateY(-6px) scale(1.025);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+    border-color: rgba(255, 255, 255, 0.2);
+    z-index: 10; /* 호버 시 인접 카드보다 위에 오도록 설정 */
 }
 .video-wrapper { position: relative; width: 100%; padding-top: 56.25%; background: #000; }
 .video-wrapper video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; }
@@ -273,6 +347,7 @@ table.cam-table tr:hover { background: rgba(255, 255, 255, 0.03); }
     background: #111c31;
 }
 .monitor-item {
+    cursor: pointer;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -735,4 +810,114 @@ table.cam-table tr:hover { background: rgba(255, 255, 255, 0.03); }
 .sms-external-link:hover {
     color: #93c5fd;
     text-decoration: underline;
+}
+
+/* ── 캠 설정 배포 뷰 스타일 ────────────────────────────── */
+.deploy-sticky-top-bar {
+    position: sticky;
+    top: var(--sticky-header-top, 74px);
+    z-index: 112;
+    background: #111c31;
+    border: 1px solid var(--card-border);
+    border-radius: 16px 16px 0 0;
+    padding: 0 20px;
+    height: 80px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+}
+.deploy-sticky-th-bar th {
+    position: sticky;
+    top: calc(var(--sticky-header-top, 74px) + 80px);
+    z-index: 111;
+    background: #111c31;
+    box-shadow: inset 0 -2px 0 #18aee7;
+}
+#sub-deploy-relay-view .relay-sticky-top-bar {
+    height: auto;
+    min-height: 80px;
+    padding: 14px 20px;
+    align-items: flex-start;
+}
+#sub-deploy-relay-view .deploy-sticky-th-bar th {
+    top: calc(var(--sticky-header-top, 74px) + var(--relay-bar-h, 168px));
+}
+.deploy-ip-input {
+    font-weight: 600;
+    transition: all 0.15s ease;
+}
+.deploy-ip-input:focus {
+    border-color: #3b82f6 !important;
+    background: rgba(30, 41, 59, 0.95) !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4);
+}
+
+/* Hide top chrome/filters in deploy mode */
+body.deploy-mode .top-chrome {
+    display: none !important;
+}
+
+/* Status badge styling (Pill shape) */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+}
+.status-badge .status-dot {
+    font-size: 0.45rem;
+}
+/* Active */
+.status-chip-active {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+/* Stopped */
+.status-chip-stopped {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+/* Inspection */
+.status-chip-inspection {
+    background: rgba(234, 179, 8, 0.15);
+    color: #facc15;
+    border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+/* ── 이력 조회 탭 버튼 ─────────────────────────────────────── */
+#history-filter-bar > div {
+    flex-wrap: wrap;
+    row-gap: 4px;
+}
+.hist-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #64748b;
+    font-size: 0.83rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+    margin-bottom: -1px;
+}
+.hist-tab-btn:hover {
+    color: #cbd5e1;
+}
+.hist-tab-btn.active {
+    color: #18aee7;
+    border-bottom-color: #18aee7;
 }
