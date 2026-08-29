@@ -175,7 +175,7 @@ class CctvController
 
     private function updateAlert(array $data): void
     {
-        if ($this->model->updateAlertConfig($data, 'stw@example.com')) {
+        if ($this->model->updateAlertConfig($data, '')) {
             $alert = $this->model->getAlertConfig();
             $trafficSync = $this->model->syncTrafficCron();
             echo json_encode([

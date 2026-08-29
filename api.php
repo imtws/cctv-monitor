@@ -2,6 +2,8 @@
 /**
  * api.php - API 엔드포인트 (Front Controller → CctvController)
  */
+date_default_timezone_set('Asia/Seoul');
+
 require_once __DIR__ . '/app/controllers/CctvController.php';
 
 $method   = $_SERVER['REQUEST_METHOD'] ?? 'GET';

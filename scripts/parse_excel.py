@@ -68,7 +68,8 @@ try:
         cam_id = f'cam{cam_num:02d}'
         prev_data = existing_map.get(cam_id, {})
 
-        cams.append({
+        # 엑셀이 권위: 경기장/종목/DDNS. IP는 cctv_ips.json(배포정보)이 권위 — 여기서 건드리지 않음.
+        entry = {
             'id': cam_id,
             'num': cam_num,
             'stadium': stadium_full,
@@ -77,13 +78,30 @@ try:
             'status': prev_data.get('status', 'STOPPED'),
             'alert_enabled': prev_data.get('alert_enabled', True),
             'alert_start': prev_data.get('alert_start', '08:00'),
-            'alert_end': prev_data.get('alert_end', '18:00')
-        })
+            'alert_end': prev_data.get('alert_end', '18:00'),
+        }
+        # 운영 메타는 유지 (엑셀에 없는 필드)
+        if prev_data.get('host_name'):
+            entry['host_name'] = prev_data['host_name']
+        if 'suppress_until' in prev_data:
+            entry['suppress_until'] = prev_data.get('suppress_until')
+
+        cams.append(entry)
 
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(cams, f, ensure_ascii=False, indent=2)
 
-    print(json.dumps({'success': True, 'message': f'Successfully updated {len(cams)} cameras from Excel file', 'count': len(cams)}))
+    removed = len(existing_map) - len({c['id'] for c in cams} & set(existing_map.keys()))
+    msg = f'Successfully updated {len(cams)} cameras from Excel file'
+    if removed > 0:
+        msg += f' ({removed} removed from monitoring scope)'
+
+    print(json.dumps({
+        'success': True,
+        'message': msg,
+        'count': len(cams),
+        'removed': removed,
+    }))
 
 except Exception as e:
     print(json.dumps({'success': False, 'message': f'Error parsing Excel: {str(e)}'}))

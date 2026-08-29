@@ -163,11 +163,21 @@ function setStatusFilter(status) {
     applyFilters();
 }
 
+/** 세그먼트 미갱신 경과 초. 브라우저↔서버 시계 오차로 음수가 나오면 0으로 보정 */
+function getSegmentElapsedSec(status) {
+    if (!status) return 0;
+    const diffSec = Math.floor(Date.now() / 1000) - (status.checked_at || 0);
+    const elapsedSec = (status.file_age !== null && status.file_age !== undefined)
+        ? (status.file_age + diffSec)
+        : diffSec;
+    return Math.max(0, elapsedSec);
+}
+
 function getSegmentStatus(cam) {
     if (!cam || !cam.live_status) return 'WAITING';
     const status = cam.live_status;
-    const diffSec = Math.floor(Date.now() / 1000) - status.checked_at;
-    const elapsedSec = (status.file_age !== null) ? (status.file_age + diffSec) : diffSec;
+    if (status.hls_stall) return 'CRITICAL';
+    const elapsedSec = getSegmentElapsedSec(status);
     if (status.rc === 2 || status.rc === 3 || elapsedSec >= 300) {
         return 'CRITICAL';
     } else if (elapsedSec >= 120) {
@@ -324,10 +334,7 @@ function patchCardView(prevCctvs, nextCctvs) {
 /** patchCardView에서 이전 데이터로 stale 여부를 판단할 때 사용 */
 function isCamStaleFromData(cam) {
     if (!cam || !cam.live_status) return false;
-    const status = cam.live_status;
-    const diffSec = Math.floor(Date.now() / 1000) - status.checked_at;
-    const elapsedSec = (status.file_age !== null) ? (status.file_age + diffSec) : diffSec;
-    return elapsedSec >= 300;
+    return getSegmentElapsedSec(cam.live_status) >= 300;
 }
 
 /** stale 상태가 전환된 카드의 wrapper(영상 영역)만 교체하고 HLS 재연결 */
@@ -1052,7 +1059,20 @@ function renderSettingsDrawer() {
                 </div>
             </section>
 
-            <button class="btn btn-success" onclick="saveEnvSettings()" style="width:100%;justify-content:center;height:42px;font-weight:700;">
+            <section class="drawer-section" style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px;">
+                <div class="drawer-section-title"><i class="fa-solid fa-file-excel" style="margin-right:6px;"></i>경기장 정보 엑셀 업로드</div>
+                <p style="font-size:0.82rem;color:var(--text-sub);margin:8px 0 12px;">
+                    경기장·종목·DDNS가 담긴 <code>.xlsx</code>를 올리면 모니터링·배포정보·재기동 목록의 경기장/종목이 엑셀 기준으로 맞춰집니다.
+                    IP 주소는 건드리지 않으며 <strong>cctv.info 배포정보</strong> 값을 그대로 씁니다.
+                </p>
+                <input type="file" id="excel-upload" accept=".xlsx" style="display:none;" onchange="uploadExcel()">
+                <button class="btn btn-success" onclick="document.getElementById('excel-upload').click()"
+                    style="width:100%;justify-content:center;height:42px;font-weight:700;">
+                    <i class="fa-solid fa-file-excel"></i> 엑셀 파일 선택 · 업로드
+                </button>
+            </section>
+
+            <button class="btn btn-success" onclick="saveEnvSettings()" style="width:100%;justify-content:center;height:42px;font-weight:700;margin-top:16px;">
                 <i class="fa-solid fa-floppy-disk"></i> 설정 저장
             </button>
         `;
@@ -1255,7 +1275,7 @@ async function applyDrawerSuppressClear() {
 
 async function uploadExcel() {
     const fileInput = document.getElementById('excel-upload');
-    if (fileInput.files.length === 0) return;
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) return;
 
     const formData = new FormData();
     formData.append('action', 'upload_excel');
@@ -1267,7 +1287,12 @@ async function uploadExcel() {
         const data = await res.json();
         if (data.success) {
             showToast('엑셀 적용 완료! ' + (data.count || '') + '개 업데이트');
-            loadData();
+            // 카드/리스트 + (배포 모드면) 배포·재기동 목록의 경기장/종목을 엑셀 기준으로 즉시 반영
+            // IP는 get_deploy_info의 cctv_ips.json을 그대로 사용
+            await loadData(true);
+            if (currentViewMode !== 'deploy') {
+                await refreshDeployViewsAfterExcel();
+            }
         } else {
             showToast('업로드 실패: ' + data.message);
         }
@@ -1275,6 +1300,19 @@ async function uploadExcel() {
         showToast('엑셀 업로드 에러');
     }
     fileInput.value = '';
+}
+
+/** 엑셀 반영 후 배포정보/재기동 테이블 메타(경기장·종목) 갱신. IP는 배포정보(ips) 유지. */
+async function refreshDeployViewsAfterExcel() {
+    try {
+        const relayBody = document.getElementById('relay-restart-table-body');
+        const deployBody = document.getElementById('deploy-table-body');
+        // 이미 그려둔 패널만 백그라운드 갱신 (IP는 API의 ips 맵 유지)
+        if (relayBody && relayBody.children.length > 0) await loadRelayRestartData();
+        else if (deployBody && deployBody.children.length > 0) await loadDeployTableData();
+    } catch (e) {
+        console.error('엑셀 후 배포/재기동 뷰 갱신 실패', e);
+    }
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1300,10 +1338,19 @@ function checkBatchSelection() { syncMasterSelection(); }
 function isCamStale(camId) {
     const cam = allCctvs.find(c => c.id === camId);
     if (!cam || !cam.live_status) return false;
-    const status = cam.live_status;
-    const diffSec = Math.floor(Date.now() / 1000) - status.checked_at;
-    const elapsedSec = (status.file_age !== null) ? (status.file_age + diffSec) : diffSec;
-    return elapsedSec >= 300;
+    return getSegmentElapsedSec(cam.live_status) >= 300;
+}
+
+/** 세그먼트 나이(초) → '방금' / 'N초 전' / 'N분 전' / 'N시간 N분 전' */
+function formatSegmentAge(elapsedSec) {
+    const sec = Math.max(0, Math.floor(elapsedSec || 0));
+    if (sec < 5) return '방금';
+    if (sec < 60) return `${sec}초 전`;
+    const mins = Math.floor(sec / 60);
+    if (mins < 60) return `${mins}분 전`;
+    const hours = Math.floor(mins / 60);
+    const remMins = mins % 60;
+    return remMins > 0 ? `${hours}시간 ${remMins}분 전` : `${hours}시간 전`;
 }
 
 function getSegmentMarkup(camId) {
@@ -1313,26 +1360,23 @@ function getSegmentMarkup(camId) {
     }
 
     const status = cam.live_status;
-    
-    // 백엔드 체크 시점으로부터 흐른 시간(초) 계산
-    const diffSec = Math.floor(Date.now() / 1000) - status.checked_at;
-    // 백엔드 감지 나이 + 흐른 시간
-    const elapsedSec = (status.file_age !== null) ? (status.file_age + diffSec) : diffSec;
-    const elapsedMin = Math.floor(elapsedSec / 60);
-    let timeStr = `${elapsedMin}분`;
-    if (elapsedMin >= 60) {
-        const hours = Math.floor(elapsedMin / 60);
-        const mins = elapsedMin % 60;
-        timeStr = mins > 0 ? `${hours}시간 ${mins}분` : `${hours}시간`;
+
+    // HLS EXTINF≈0 — 세그먼트 file_age는 OK여도 영상이 0초에 멈춤
+    if (status.hls_stall) {
+        return `<span class="seg-pill critical" title="${escapeHtml(status.output || '')}"><i class="fa-solid fa-circle-stop"></i> 재생 멈춤 · HLS duration≈0</span>`;
     }
+
+    // 백엔드 감지 나이 + 체크 이후 경과 시간 (시계 오차로 음수면 0)
+    const elapsedSec = getSegmentElapsedSec(status);
+    const ageStr = formatSegmentAge(elapsedSec);
 
     // Nagios 결과 코드 또는 세그먼트 갱신 지연으로 판단
     if (status.rc === 2 || status.rc === 3 || elapsedSec >= 300) { // CRITICAL/UNKNOWN 또는 5분 이상 갱신 없음 (중단)
-        return `<span class="seg-pill critical"><i class="fa-solid fa-circle-stop"></i> 비갱신 ${timeStr}째 (중단)</span>`;
+        return `<span class="seg-pill critical"><i class="fa-solid fa-circle-stop"></i> ${ageStr}부터 미갱신 (중단)</span>`;
     } else if (elapsedSec >= 120) { // 2분 이상 (지연)
-        return `<span class="seg-pill warning"><i class="fa-solid fa-circle-exclamation"></i> 비갱신 ${timeStr}째 (지연)</span>`;
-    } else { // 정상 (2분 미만)
-        return `<span class="seg-pill ok"><i class="fa-solid fa-circle-play"></i> 정상 갱신 ${elapsedSec}초째 (OK)</span>`;
+        return `<span class="seg-pill warning"><i class="fa-solid fa-circle-exclamation"></i> ${ageStr}부터 미갱신 (지연)</span>`;
+    } else { // 정상 (2분 미만) — age≈0은 '방금 갱신' (영상 길이 0초와 무관)
+        return `<span class="seg-pill ok"><i class="fa-solid fa-circle-play"></i> ${ageStr} 갱신 (OK)</span>`;
     }
 }
 
@@ -1983,7 +2027,8 @@ function updateDeployLockMessage(message, sub) {
 async function confirmDeployProcess() {
     closeDiffModal();
 
-    showDeployLock('cctv.info 배포 진행 중...');
+    showDeployLock('cctv.info 배포 및 전체 CAM 재기동 중...');
+    updateDeployLockMessage('cctv.info 배포 및 전체 CAM 재기동 중...', 'cctv.info 배포 후 전 캠 서버 cctv-relay 서비스를 재기동합니다');
 
     try {
         const res = await fetch('api.php', {
@@ -2175,6 +2220,19 @@ function showDeployCompleteNotification(changeCount, changes, data) {
         </div>`;
     }
 
+    const rr = data?.relay_restart;
+    let relayHtml = '';
+    if (rr && (rr.total ?? 0) > 0) {
+        relayHtml = `
+        <div style="background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.15); border-radius:10px; padding:10px 14px; font-size:0.82rem; color:#94a3b8;">
+            <i class="fa-solid fa-arrows-spin" style="margin-right:6px; color:#34d399;"></i>
+            cctv-relay 재기동
+            <strong style="color:#60a5fa;">${rr.total}</strong>대 중
+            성공 <strong style="color:#10b981;">${rr.success ?? 0}</strong>
+            ${(rr.fail ?? 0) > 0 ? ` / 실패 <strong style="color:#ef4444;">${rr.fail}</strong>` : ''}
+        </div>`;
+    }
+
     popup.innerHTML = `
         <style>@keyframes slideInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }</style>
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:2px;">
@@ -2188,6 +2246,7 @@ function showDeployCompleteNotification(changeCount, changes, data) {
             <button onclick="document.getElementById('deploy-complete-popup').remove()" style="margin-left:auto; background:none; border:none; color:#64748b; cursor:pointer; font-size:1.2rem; line-height:1; padding:0 2px;">&times;</button>
         </div>
         ${statsHtml}
+        ${relayHtml}
         ${changeCount > 0 && !isPartial ? `
         <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.07); border-radius:10px; padding:12px 14px; font-size:0.82rem; color:#cbd5e1; line-height:1.7;">
             <div style="font-size:0.72rem; font-weight:800; color:#64748b; letter-spacing:0.04em; text-transform:uppercase; margin-bottom:8px;">변경 내용 (${changeCount}건)</div>
@@ -2337,7 +2396,12 @@ const COLUMNS = {
     '': [
         { label: '시각',    width: '148px', render: r => `<span style="color:#94a3b8; font-size:0.8rem;">${escapeHtml(r.created_at || '')}</span>` },
         { label: '구분',    width: '200px', render: r => typeBadge(r.type) },
-        { label: '제목',    width: '',      render: r => `<span style="font-weight:600; color:#f1f5f9;">${escapeHtml(r.title || '')}</span>` },
+        { label: '제목',    width: '',      render: r => {
+            const auto = (r.type === 'cctv_relay_restart' && r.detail?.auto)
+                ? `<span style="display:inline-block;margin-right:6px;padding:1px 7px;border-radius:999px;background:rgba(245,158,11,0.15);color:#fbbf24;font-size:0.72rem;font-weight:700;vertical-align:middle;">자동</span>`
+                : '';
+            return `${auto}<span style="font-weight:600; color:#f1f5f9;">${escapeHtml(r.title || '')}</span>`;
+        } },
         { label: '결과',    width: '100px', render: r => statusBadge(r.status) },
         { label: '요약',    width: '340px', render: r => renderSummaryCell(r) },
     ],
@@ -2384,9 +2448,14 @@ const COLUMNS = {
         { label: '시각',        width: '148px', render: r => `<span style="color:#94a3b8; font-size:0.8rem;">${escapeHtml(r.created_at || '')}</span>` },
         { label: '카메라',      width: '220px', render: r => getFormattedCamName(r.detail?.cam_id) },
         { label: 'IP',          width: '140px', render: r => `<span style="font-family:monospace; font-size:0.8rem; color:#94a3b8;">${escapeHtml(r.detail?.ip || '-')}</span>` },
-        { label: '제목',        width: '',      render: r => `<span style="font-weight:600; color:#f1f5f9;">${escapeHtml(r.title || '')}</span>` },
+        { label: '제목',        width: '',      render: r => {
+            const auto = r.detail?.auto
+                ? `<span style="display:inline-block;margin-right:6px;padding:1px 7px;border-radius:999px;background:rgba(245,158,11,0.15);color:#fbbf24;font-size:0.72rem;font-weight:700;vertical-align:middle;">자동</span>`
+                : '';
+            return `${auto}<span style="font-weight:600; color:#f1f5f9;">${escapeHtml(r.title || '')}</span>`;
+        } },
         { label: '결과',        width: '100px', render: r => statusBadge(r.status) },
-        { label: '출력 메시지', width: '280px', render: r => `<span style="color:#cbd5e1; font-family:monospace; font-size:0.8rem;">${escapeHtml(r.detail?.output || '-')}</span>` },
+        { label: '서비스 상태', width: '160px', render: r => relayHistStatusCell(r.detail) },
     ],
 };
 
@@ -2478,7 +2547,11 @@ function renderSummaryCell(r) {
     if (r.type === 'cctv_relay_restart') {
         const cam = d.cam_id ? String(d.cam_id).toUpperCase() : '';
         const extra = d.ip ? ` (${d.ip})` : '';
-        return `<span style="font-size:0.8rem; color:#94a3b8;">${escapeHtml(cam + extra)}${d.output ? ' · ' + escapeHtml(d.output) : ''}</span>`;
+        const st = formatRelayHistStatus(d);
+        const auto = d.auto
+            ? `<span style="display:inline-block;margin-right:6px;padding:1px 7px;border-radius:999px;background:rgba(245,158,11,0.15);color:#fbbf24;font-size:0.7rem;font-weight:700;">자동</span>`
+            : '';
+        return `<span style="font-size:0.8rem; color:#94a3b8;">${auto}${escapeHtml(cam + extra)}${st ? ' · ' + escapeHtml(st) : ''}</span>`;
     }
     return '-';
 }
@@ -2767,8 +2840,44 @@ function buildEnvDetail(d) {
         </div>`);
 }
 
+function formatRelayHistStatus(d) {
+    if (!d) return '';
+    const st = String(d.service_status || '').trim();
+    if (st === 'active') return 'active (실행중)';
+    if (st === 'inactive') return 'inactive (중지됨)';
+    if (st === 'failed') return 'failed (실패)';
+    if (st === 'activating') return 'activating (기동중)';
+    if (st) return st;
+
+    // 구 이력: known_hosts 경고 등은 숨기고, active 등 상태 키워드만 추출
+    const raw = String(d.output || '').trim();
+    if (!raw) return '';
+    if (/known hosts|Could not create directory|\.ssh/i.test(raw)) {
+        const m = raw.match(/\b(active|inactive|failed|activating)\b/i);
+        return m ? `${m[1].toLowerCase()} (확인됨)` : '-';
+    }
+    return raw;
+}
+
+function relayHistStatusCell(d) {
+    const label = formatRelayHistStatus(d) || '-';
+    const st = String(d?.service_status || '').toLowerCase();
+    const color = (st === 'active' || /active \(실행중\)/.test(label))
+        ? '#34d399'
+        : (st === 'failed' || st === 'inactive' || st === 'unreachable' ? '#f87171' : '#94a3b8');
+    return `<span style="color:${color}; font-family:monospace; font-size:0.8rem; font-weight:600;">${escapeHtml(label)}</span>`;
+}
+
 function buildRelayRestartDetail(d) {
     let h = '';
+    if (d.auto) {
+        const trigger = d.trigger === 'hls_stall'
+            ? 'HLS 0초 멈춤 자동조치'
+            : (d.trigger === 'mtime_stale' ? '세그먼트 미갱신 자동조치' : (d.output || '자동조치'));
+        h += dSection('fa-robot', '재기동 유형', '#f59e0b',
+            `<div><span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,0.15);color:#fbbf24;font-size:0.78rem;font-weight:700;">자동 재기동</span>
+            <span style="margin-left:8px;color:#cbd5e1;font-size:0.85rem;">${escapeHtml(trigger)}</span></div>`);
+    }
     if (d.cam_id) {
         const ipHtml = d.ip
             ? `<span style="color:#64748b;font-family:monospace;margin-left:8px;">${escapeHtml(d.ip)}</span>`
@@ -2776,11 +2885,37 @@ function buildRelayRestartDetail(d) {
         h += dSection('fa-video', '대상 카메라', '#10b981',
             `<div>${getFormattedCamName(d.cam_id)}${ipHtml}</div>`);
     }
-    if (d.output && String(d.output).trim()) {
-        h += dSection('fa-terminal', '출력', '#94a3b8',
-            `<pre style="background:#050b16;border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:12px 14px;font-size:0.74rem;color:#94a3b8;overflow-x:auto;max-height:240px;overflow-y:auto;line-height:1.6;margin:0;white-space:pre-wrap;word-break:break-all;">${escapeHtml(String(d.output).trim())}</pre>`);
+    // 일괄 재기동 이력
+    if (Array.isArray(d.results) && d.results.length) {
+        const rows = d.results.map(r => {
+            const ok = !!(r.verified || (r.status === 'active'));
+            const st = r.status || (ok ? 'active' : 'unknown');
+            const color = ok ? '#34d399' : '#f87171';
+            return `<tr>
+                <td style="padding:8px 12px;font-family:monospace;font-weight:700;color:#38bdf8;">${escapeHtml(String(r.cam_id || '').toUpperCase())}</td>
+                <td style="padding:8px 12px;font-family:monospace;color:#94a3b8;">${escapeHtml(r.ip || '-')}</td>
+                <td style="padding:8px 12px;font-family:monospace;font-weight:600;color:${color};">${escapeHtml(st)}</td>
+            </tr>`;
+        }).join('');
+        h += dSection('fa-list', `재기동 대상 (${d.results.length}대)`, '#10b981',
+            `<div style="border-radius:8px;overflow:hidden;border:1px solid rgba(16,185,129,0.15);">
+                <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+                    <thead><tr style="background:#0d1726;border-bottom:1px solid rgba(255,255,255,0.07);">
+                        <th style="padding:8px 12px;text-align:left;color:#64748b;">카메라</th>
+                        <th style="padding:8px 12px;text-align:left;color:#64748b;">IP</th>
+                        <th style="padding:8px 12px;text-align:left;color:#64748b;">서비스 상태</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`);
+        return h;
+    }
+    const stLabel = formatRelayHistStatus(d);
+    if (stLabel) {
+        h += dSection('fa-heart-pulse', '원격 서비스 상태', '#10b981',
+            `<div style="font-family:monospace;font-size:0.9rem;font-weight:700;color:${/active/.test(stLabel) ? '#34d399' : '#f87171'};">${escapeHtml(stLabel)}</div>`);
     } else {
-        h += `<div style="color:#64748b;font-size:0.83rem;">추가 출력 없음</div>`;
+        h += `<div style="color:#64748b;font-size:0.83rem;">상태 정보 없음</div>`;
     }
     return h;
 }

@@ -8,14 +8,10 @@
             <i class="fa-solid fa-triangle-exclamation" style="color: #eab308; font-size: 1.25rem;"></i>
             <h3 style="margin: 0; font-weight: 700; font-size: 1.15rem; letter-spacing: -0.02em;">cctv.info 변경 정보 감지</h3>
         </div>
-        <p style="color: #cbd5e1; font-size: 0.88rem; margin-bottom: 12px; line-height: 1.5;">
-            갱신된 DDNS 주소를 조회한 결과, 다음과 같은 변경사항이 감지되었습니다. 이 정보를 전체 캠 서버에 배포하시겠습니까?
+        <p style="color: #cbd5e1; font-size: 0.88rem; margin-bottom: 16px; line-height: 1.5;">
+            갱신된 DDNS 주소를 조회한 결과, 다음과 같은 변경사항이 감지되었습니다. 이 정보를 전체 캠 서버에 배포하시겠습니까?<br>
+            <span style="color: #94a3b8; font-size: 0.82rem;">배포 시 전체 CAM 서버 cctv-relay 서비스가 재기동됩니다.</span>
         </p>
-        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 0.82rem; color: #f87171; line-height: 1.55;">
-            <i class="fa-solid fa-triangle-exclamation" style="margin-right: 6px;"></i>
-            <strong>[경고] 실패/타임아웃으로 주석(#) 처리된 장비는 카메라 서버에 프로파일이 활성화되지 않아 실시간 캠 릴레이 실행이 불가능해집니다.</strong><br>
-            반드시 주소 및 포트 포워딩 상태를 확인한 후 배포하거나, 기존 데이터를 유지하십시오.
-        </div>
 
         <div style="max-height: 40vh; overflow-y: auto; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; background: #0f172a; padding: 16px; margin-bottom: 20px; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.85rem; line-height: 1.6;">
             <div id="diff-content" style="white-space: pre-wrap; color: #e2e8f0;">

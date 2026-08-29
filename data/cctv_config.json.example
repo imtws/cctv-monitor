@@ -1,0 +1,25 @@
+[
+    {
+        "id": "cam01",
+        "num": 1,
+        "stadium": "예시경기장 (제1경기장)",
+        "category": "예시종목",
+        "ddns": "https://example.com/cam01",
+        "status": "STOPPED",
+        "alert_enabled": true,
+        "alert_start": "08:00",
+        "alert_end": "18:00",
+        "suppress_until": null
+    },
+    {
+        "id": "cam02",
+        "num": 2,
+        "stadium": "예시경기장 (제1경기장)",
+        "category": "예시종목2",
+        "ddns": "https://example.com/cam02",
+        "status": "STOPPED",
+        "alert_enabled": true,
+        "alert_start": "08:00",
+        "alert_end": "18:00"
+    }
+]

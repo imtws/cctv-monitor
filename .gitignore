@@ -3,8 +3,14 @@ data/cctv_config.json
 data/alert_config.json
 data/cctv_ips.json
 data/action_history.json
+data/action_history.json.bak*
 data/traffic_cron_state
 data/traffic_cron_sync.log
+data/live_status.json
+
+# 예제 파일은 커밋 허용
+!data/*.example
+!data/*.example.json
 
 # Python
 __pycache__/
@@ -21,6 +27,7 @@ Thumbs.db
 
 # 로그
 *.log
+debug_logs/
 
 # 백업 디렉토리 (선택적으로 제외)
 stw_backup/

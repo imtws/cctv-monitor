@@ -1,0 +1,11 @@
+{
+    "enabled": true,
+    "start_time": "08:00",
+    "end_time": "18:00",
+    "work_days": [1, 2, 3, 4, 5],
+    "recipient": "alert@example.com",
+    "root_password": "",
+    "traffic_enabled": false,
+    "traffic_start": "",
+    "traffic_end": ""
+}

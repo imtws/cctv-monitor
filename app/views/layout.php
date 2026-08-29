@@ -64,7 +64,8 @@
                                 <div>
                                     <h3 style="margin: 0; font-weight: 800; font-size: 1.15rem; color: #f8fafc; letter-spacing: -0.01em;">예시 행사 캠 cctv.info 배포정보</h3>
                                     <p style="color: #94a3b8; font-size: 0.82rem; margin-top: 4px; font-weight: 500;">
-                                        엑셀의 IP 열을 세로로 복사(Ctrl+C)하여 아래 IP 입력창에 붙여넣기(Ctrl+V) 하시면 순서대로 자동 입력됩니다.
+                                        엑셀의 IP 열을 세로로 복사(Ctrl+C)하여 아래 IP 입력창에 붙여넣기(Ctrl+V) 하시면 순서대로 자동 입력됩니다.<br>
+                                        cctv.info 배포 간 전체 CAM 서버 cctv-relay 서비스가 재기동 됩니다.
                                     </p>
                                 </div>
                                 <div style="display: flex; gap: 10px; align-items: center;">

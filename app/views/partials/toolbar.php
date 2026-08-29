@@ -69,8 +69,8 @@
             <select class="select-input" id="segment-filter" onchange="applyFilters()">
                 <option value="">-- 수신 상태 (전체) --</option>
                 <option value="OK">갱신 OK만</option>
-                <option value="WARNING">비갱신 (지연)만</option>
-                <option value="CRITICAL">비갱신 (중단)만</option>
+                <option value="WARNING">미갱신 (지연)만</option>
+                <option value="CRITICAL">이상(중단·재생멈춤)만</option>
                 <option value="WAITING">수신 대기중만</option>
             </select>
             <div class="selection-pill">

@@ -12,6 +12,9 @@ class CctvModel
 
     public function __construct()
     {
+        // 이력·스케줄 시각은 항상 KST 기준으로 기록
+        date_default_timezone_set('Asia/Seoul');
+
         $this->cctvFile    = dirname(__DIR__, 2) . '/data/cctv_config.json';
         $this->alertFile   = dirname(__DIR__, 2) . '/data/alert_config.json';
         $this->historyFile = dirname(__DIR__, 2) . '/data/action_history.json';
@@ -549,29 +552,93 @@ class CctvModel
             $histStatus = 'success';
         }
 
+        // 배포 후 등록된 전체 CAM 서버 cctv-relay 재기동
+        $restartSummary = $this->restartAllCctvRelaysAfterDeploy();
+
         $changeCount = count($pendingChanges);
         $this->saveHistory(
             'deploy',
             'cctv.info 배포 작업',
             $histStatus,
             [
-                'change_count'  => $changeCount,
-                'changes'       => $pendingChanges,
-                'total'         => $totalCount,
-                'success'       => $successCount,
-                'fail'          => $failCount,
-                'failed_hosts'  => $failedHosts,
-                'deploy_output' => $out,
+                'change_count'     => $changeCount,
+                'changes'          => $pendingChanges,
+                'total'            => $totalCount,
+                'success'          => $successCount,
+                'fail'             => $failCount,
+                'failed_hosts'     => $failedHosts,
+                'deploy_output'    => $out,
+                'relay_restart'    => $restartSummary,
             ]
         );
 
         return [
-            'success'       => true,
-            'total'         => $totalCount,
-            'success_count' => $successCount,
-            'fail_count'    => $failCount,
-            'failed_hosts'  => $failedHosts,
-            'output'        => $out,
+            'success'         => true,
+            'total'           => $totalCount,
+            'success_count'   => $successCount,
+            'fail_count'      => $failCount,
+            'failed_hosts'    => $failedHosts,
+            'output'          => $out,
+            'relay_restart'   => $restartSummary,
+        ];
+    }
+
+    /**
+     * cctv.info 배포 직후 IP가 등록된 전체 캠의 cctv-relay를 재기동합니다.
+     */
+    private function restartAllCctvRelaysAfterDeploy(): array
+    {
+        $ips = $this->getCctvIps();
+        $results = [];
+        $okCount = 0;
+        $failCount = 0;
+
+        foreach ($ips as $camId => $ip) {
+            $camId = trim((string)$camId);
+            $ip = trim((string)$ip);
+            if ($camId === '' || $ip === '') {
+                continue;
+            }
+
+            $r = $this->restartCctvRelay($camId, false);
+            $ok = !empty($r['success']);
+            if ($ok) {
+                $okCount++;
+            } else {
+                $failCount++;
+            }
+            $results[] = [
+                'cam_id'  => $camId,
+                'ip'      => $ip,
+                'success' => $ok,
+                'message' => $r['message'] ?? '',
+                'status'  => $r['service_status'] ?? '',
+            ];
+        }
+
+        $total = count($results);
+        if ($total > 0) {
+            $status = ($failCount === 0) ? 'success' : (($okCount > 0) ? 'partial' : 'fail');
+            $this->saveHistory(
+                'cctv_relay_restart',
+                "cctv.info 배포 후 전체 cctv-relay 재기동 ({$total}대)",
+                $status,
+                [
+                    'total'   => $total,
+                    'success' => $okCount,
+                    'fail'    => $failCount,
+                    'auto'    => false,
+                    'from'    => 'deploy',
+                    'results' => $results,
+                ]
+            );
+        }
+
+        return [
+            'total'   => $total,
+            'success' => $okCount,
+            'fail'    => $failCount,
+            'results' => $results,
         ];
     }
 
@@ -589,41 +656,76 @@ class CctvModel
             return ['success' => false, 'message' => 'Root password is not configured in settings.'];
         }
 
-        // Run ssh command to restart service
-        $cmd = sprintf(
-            "sshpass -p %s ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@%s \"systemctl restart cctv-relay\" 2>&1",
+        $sshBase = sprintf(
+            "sshpass -p %s ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=10 root@%s",
             escapeshellarg($password),
             escapeshellarg($ip)
         );
 
+        // 재기동 (stderr의 known_hosts 경고 억제)
+        $restartCmd = $sshBase . ' "systemctl restart cctv-relay" 2>/dev/null';
         $output = [];
         $rc = 0;
-        exec($cmd, $output, $rc);
+        exec($restartCmd, $output, $rc);
 
-        $outStr = implode("\n", $output);
-
-        if ($rc === 0) {
-            if ($saveHistory) {
-                $this->saveHistory(
-                    'cctv_relay_restart',
-                    "캠 서버 {$camId} ({$ip}) cctv-relay 서비스 재기동",
-                    'success',
-                    ['output' => $outStr, 'cam_id' => $camId, 'ip' => $ip]
-                );
-            }
-            return ['success' => true, 'message' => "캠 서버 {$camId} ({$ip}) cctv-relay 재기동 성공", 'output' => $outStr, 'ip' => $ip];
-        } else {
-            if ($saveHistory) {
-                $this->saveHistory(
-                    'cctv_relay_restart',
-                    "캠 서버 {$camId} ({$ip}) cctv-relay 서비스 재기동 실패",
-                    'fail',
-                    ['output' => $outStr, 'cam_id' => $camId, 'ip' => $ip]
-                );
-            }
-            return ['success' => false, 'message' => "재기동 실패: " . $outStr, 'output' => $outStr, 'ip' => $ip];
+        // 재기동 후 원격 서비스 상태 확인
+        usleep(500000); // 0.5s
+        $statusCmd = $sshBase . ' "systemctl is-active cctv-relay" 2>/dev/null';
+        $statusOut = [];
+        $statusRc = 0;
+        exec($statusCmd, $statusOut, $statusRc);
+        $serviceStatus = trim(implode('', $statusOut));
+        if ($serviceStatus === '') {
+            $serviceStatus = ($rc === 0) ? 'unknown' : 'unreachable';
         }
+
+        $statusLabel = match ($serviceStatus) {
+            'active'   => 'active (실행중)',
+            'inactive' => 'inactive (중지됨)',
+            'failed'   => 'failed (실패)',
+            'activating' => 'activating (기동중)',
+            default    => $serviceStatus,
+        };
+
+        $ok = ($rc === 0 && $serviceStatus === 'active');
+        $detail = [
+            'cam_id'          => $camId,
+            'ip'              => $ip,
+            'service_status'  => $serviceStatus,
+            'output'          => $statusLabel,
+        ];
+
+        if ($saveHistory) {
+            $this->saveHistory(
+                'cctv_relay_restart',
+                "캠 서버 {$camId} ({$ip}) cctv-relay 서비스 재기동",
+                $ok ? 'success' : 'fail',
+                $detail
+            );
+        }
+
+        if ($ok) {
+            return [
+                'success'         => true,
+                'message'         => "캠 서버 {$camId} ({$ip}) cctv-relay 재기동 성공",
+                'output'          => $statusLabel,
+                'service_status'  => $serviceStatus,
+                'ip'              => $ip,
+            ];
+        }
+
+        $failMsg = ($rc !== 0)
+            ? "재기동 실패 (SSH/명령 오류)"
+            : "재기동 후 상태: {$statusLabel}";
+        return [
+            'success'         => false,
+            'message'         => $failMsg,
+            'output'          => $statusLabel,
+            'service_status'  => $serviceStatus,
+            'ip'              => $ip,
+        ];
     }
+
     public function getCctvRelayStatus(string $camId): array
     {
         $ips = $this->getCctvIps();
@@ -639,7 +741,7 @@ class CctvModel
         }
 
         $cmd = sprintf(
-            "sshpass -p %s ssh -o StrictHostKeyChecking=no -o ConnectTimeout=6 root@%s \"systemctl is-active cctv-relay\" 2>/dev/null",
+            "sshpass -p %s ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=6 root@%s \"systemctl is-active cctv-relay\" 2>/dev/null",
             escapeshellarg($password),
             escapeshellarg($ip)
         );

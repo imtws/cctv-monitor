@@ -14,15 +14,19 @@ RESTART_THRESHOLD=5
 # ---- 0) 웹 모니터링 개별 알림 스케줄 & 중지 상태 스캔 ----
 ALERT_CONFIG="/home/www/cammon/data/alert_config.json"
 CCTV_CONFIG="/home/www/cammon/data/cctv_config.json"
-MAIL_TO="stw@example.com"
+MAIL_TO=""
+GLOBAL_ENABLED="True"
+IN_SCHEDULE="true"
+ALERT_MAIL_ENABLED="true"
 
 if [ -f "$ALERT_CONFIG" ]; then
     GLOBAL_ENABLED=$(python3 -c "import json; d=json.load(open('$ALERT_CONFIG')); print(d.get('enabled', True))" 2>/dev/null)
-    if [ "$GLOBAL_ENABLED" = "False" ]; then
-        exit 0
+    RECIPIENT=$(python3 -c "import json; d=json.load(open('$ALERT_CONFIG')); print((d.get('recipient') or '').strip())" 2>/dev/null)
+    if [ -n "$RECIPIENT" ]; then
+        MAIL_TO="$RECIPIENT"
     fi
 
-    # 비활성화 시간 체크: 현재 시각이 허용된 요일/시간대가 아니면 종료
+    # 알람 스케줄: 모니터링/상태 갱신은 24h 수행, 메일만 이 시간대에 발송
     IN_SCHEDULE=$(ALERT_CONFIG="$ALERT_CONFIG" python3 - <<'PYIN_SCHEDULE'
 import json, datetime, sys, os
 
@@ -71,9 +75,10 @@ if start_time_str and end_time_str:
 print("true")
 PYIN_SCHEDULE
     )
-    if [ "$IN_SCHEDULE" = "false" ]; then
-        exit 0
-    fi
+fi
+
+if [ "$GLOBAL_ENABLED" = "False" ] || [ "$IN_SCHEDULE" = "false" ]; then
+    ALERT_MAIL_ENABLED="false"
 fi
 
 if [ -f "$CCTV_CONFIG" ]; then
@@ -150,6 +155,22 @@ else:
             for host_name in hosts:
                 rows.append((host_name, cam_id, reason))
 
+# cctv_config.json(엑셀)에 없는 Nagios 호스트 → 모니터링·알람 대상 제외
+registered_nums = {
+    int(c["num"]) for c in cams
+    if str(c.get("num", "")).isdigit()
+}
+excepted_hosts = {row[0] for row in rows}
+for num, hostnames in num_to_hostnames.items():
+    if num in registered_nums:
+        continue
+    cam_id = f"cam{num:02d}"
+    for host_name in hostnames:
+        if host_name in excepted_hosts:
+            continue
+        rows.append((host_name, cam_id, "미등록(엑셀 외)"))
+        excepted_hosts.add(host_name)
+
 for host_name, cam_id, reason in rows:
     print(f"{host_name}\t{cam_id}\t{reason}")
 PYIN
@@ -187,7 +208,19 @@ RESULTS_FILE="${WORKDIR}/results.tsv"
 
 trap 'rm -rf "$WORKDIR"' EXIT
 
-# ---- 1) 캠 호스트 목록 ----
+# ---- 1) 캠 호스트 목록 (cctv_config.json = 엑셀 업로드 기준, 여기 있는 번호만 NRPE 조회) ----
+
+REGISTERED_CAM_NUMS=""
+if [ -f "$CCTV_CONFIG" ]; then
+    REGISTERED_CAM_NUMS=$(python3 -c "
+import json
+try:
+    cams = json.load(open('$CCTV_CONFIG'))
+except Exception:
+    cams = []
+print(' '.join(str(int(c['num'])) for c in cams if str(c.get('num', '')).isdigit()))
+" 2>/dev/null)
+fi
 
 : > "${WORKDIR}/hostlist.txt"
 
@@ -203,10 +236,30 @@ for cfg in /etc/nagios/objects/Monitor/c*@example.com/*.cfg; do
     # cam 호스트만 (패턴: *-cam-*)
     [[ "$hn" != *-cam-* ]] && continue
 
+    # 엑셀(cctv_config)에 등록된 번호만 모니터링 — 미등록(해지) 호스트는 NRPE 생략
+    if [ -f "$CCTV_CONFIG" ]; then
+        if [[ "$hn" =~ -cam-([0-9]+)$ ]]; then
+            cam_num_int=$((10#${BASH_REMATCH[1]}))
+            if [ -z "$REGISTERED_CAM_NUMS" ]; then
+                continue
+            fi
+            if ! echo " $REGISTERED_CAM_NUMS " | grep -q " ${cam_num_int} "; then
+                continue
+            fi
+        else
+            continue
+        fi
+    fi
+
     printf '%s\t%s\n' "$hn" "$addr" >> "${WORKDIR}/hostlist.txt"
 done
 
 if [ ! -s "${WORKDIR}/hostlist.txt" ]; then
+    if [ -f "$CCTV_CONFIG" ]; then
+        log "no registered camera hosts to check (cctv_config has no matching Nagios hosts)"
+        : > "$STATE_FILE"
+        exit 0
+    fi
     log "ERROR: no camera hosts found"
     exit 1
 fi
@@ -270,21 +323,136 @@ while IFS=$'\t' read -r hn rc out; do
 
 done < "$RESULTS_FILE"
 
+# ---- 4.4) HLS 0초 멈춤 감지 (NRPE OK인데 EXTINF≈0 / TARGETDURATION=0) ----
+# Nagios는 세그먼트 파일 age만 보므로, 플레이리스트 duration 이상을 별도 검사한다.
+HLS_STALL_FILE="${WORKDIR}/hls_stall.tsv"
+: > "$HLS_STALL_FILE"
+
+EXCEPT_HOSTS_STR=$(printf '%s\n' "${EXCEPT_HOSTS[@]}")
+CURRENT_PROBLEM_STR=$(printf '%s\n' "${CURRENT_PROBLEM_HOSTS[@]}")
+
+RESULTS_FILE="$RESULTS_FILE" \
+HLS_STALL_FILE="$HLS_STALL_FILE" \
+EXCEPT_HOSTS_STR="$EXCEPT_HOSTS_STR" \
+CURRENT_PROBLEM_STR="$CURRENT_PROBLEM_STR" \
+python3 - <<'PYIN_HLS'
+import os
+import re
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+results_path = os.environ.get("RESULTS_FILE")
+out_path = os.environ.get("HLS_STALL_FILE")
+excepted = set(x.strip() for x in (os.environ.get("EXCEPT_HOSTS_STR") or "").splitlines() if x.strip())
+already = set(x.strip() for x in (os.environ.get("CURRENT_PROBLEM_STR") or "").splitlines() if x.strip())
+
+candidates = []
+if results_path and os.path.exists(results_path):
+    with open(results_path, "r", encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split("\t")
+            if len(parts) < 3:
+                continue
+            hn, rc = parts[0], parts[1]
+            if hn in excepted or hn in already:
+                continue
+            # NRPE OK(0) / WARNING(1) 만 대상 — CRITICAL/UNKNOWN 은 이미 장애
+            if rc not in ("0", "1"):
+                continue
+            m = re.search(r"-cam-(\d+)$", hn)
+            if not m:
+                continue
+            cam_id = f"cam{int(m.group(1)):02d}"
+            candidates.append((hn, cam_id))
+
+def probe(item):
+    hn, cam_id = item
+    url = f"http://{cam_id}.example.com:8080/hls/webcam.m3u8"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "cctv-digest-hls-probe/1.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            body = resp.read().decode("utf-8", "ignore")
+    except Exception as e:
+        # 접속 실패는 NRPE CRITICAL 쪽에서 다루는 경우가 많아 여기선 skip
+        return None
+
+    td_m = re.search(r"#EXT-X-TARGETDURATION:([\d.]+)", body)
+    ext = [float(x) for x in re.findall(r"#EXTINF:([\d.]+)", body)]
+    if not td_m and not ext:
+        return None
+
+    td_v = float(td_m.group(1)) if td_m else None
+    avg = (sum(ext) / len(ext)) if ext else None
+    stall = (td_v is not None and td_v < 1.0) or (avg is not None and avg < 0.5)
+    if not stall:
+        return None
+
+    td_s = f"{td_v:.6f}".rstrip("0").rstrip(".") if td_v is not None else "n/a"
+    avg_s = f"{avg:.6f}".rstrip("0").rstrip(".") if avg is not None else "n/a"
+    msg = (
+        f"CRITICAL - HLS stall (video stuck at 0s): "
+        f"TARGETDURATION={td_s}, EXTINF_avg={avg_s} | cam={cam_id}"
+    )
+    return f"{hn}\t2\t{msg}\thls_stall"
+
+rows = []
+if candidates:
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        futs = [pool.submit(probe, c) for c in candidates]
+        for fut in as_completed(futs):
+            row = fut.result()
+            if row:
+                rows.append(row)
+
+rows.sort()
+with open(out_path, "w", encoding="utf-8") as f:
+    for row in rows:
+        f.write(row + "\n")
+PYIN_HLS
+
+if [ -s "$HLS_STALL_FILE" ]; then
+    while IFS=$'\t' read -r hn rc out kind; do
+        [ -z "$hn" ] && continue
+        CURRENT_PROBLEM_HOSTS+=("$hn")
+        PROBLEM_ROWS+=(
+            "${hn}"$'\t'"${rc}"$'\t'"${out}"$'\t'"${kind:-hls_stall}"
+        )
+        log "hls_stall detected: $hn — $out"
+    done < "$HLS_STALL_FILE"
+fi
+
 PROBLEM_COUNT=${#PROBLEM_ROWS[@]}
 
 # ---- 4.5) 웹 모니터링 연동용 실시간 상태 JSON 저장 ----
 if [ -f "$RESULTS_FILE" ]; then
-    RESULTS_FILE="$RESULTS_FILE" python3 - <<'PYIN'
-import datetime
+    RESULTS_FILE="$RESULTS_FILE" \
+    HLS_STALL_FILE="$HLS_STALL_FILE" \
+    python3 - <<'PYIN'
 import json
 import os
 import re
 import time
 
 results_path = os.environ.get("RESULTS_FILE")
+hls_path = os.environ.get("HLS_STALL_FILE")
 out_json = "/home/www/cammon/data/live_status.json"
 
+hls_by_host = {}
+if hls_path and os.path.exists(hls_path):
+    with open(hls_path, "r", encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split("\t")
+            if len(parts) >= 3:
+                hls_by_host[parts[0]] = parts[2]
+
 status_map = {}
+now_ts = int(time.time())
 if results_path and os.path.exists(results_path):
     with open(results_path, 'r', encoding='utf-8', errors='ignore') as f:
         for line in f:
@@ -294,18 +462,23 @@ if results_path and os.path.exists(results_path):
             parts = line.split('\t')
             if len(parts) >= 3:
                 hn, rc, out = parts[0], parts[1], parts[2]
-                
+
                 file_age = None
                 age_match = re.search(r'(?:file_age|age)=(\d+)', out)
                 if age_match:
                     file_age = int(age_match.group(1))
-                
-                status_map[hn] = {
+
+                entry = {
                     "rc": int(rc),
                     "output": out,
                     "file_age": file_age,
-                    "checked_at": int(time.time())
+                    "checked_at": now_ts,
+                    "hls_stall": False,
                 }
+                if hn in hls_by_host:
+                    entry["hls_stall"] = True
+                    entry["output"] = hls_by_host[hn]
+                status_map[hn] = entry
 
 # 원자적 쓰기
 if status_map:
@@ -315,9 +488,174 @@ if status_map:
             json.dump(status_map, f, indent=2, ensure_ascii=False)
         os.rename(tmp_path, out_json)
         os.chmod(out_json, 0o666)
-    except Exception as e:
+    except Exception:
         pass
 PYIN
+fi
+
+# ---- 4.6) 캠서버 self-heal(자동 재기동) → cammon 작업이력 ----
+SELF_HEAL_STATE="/var/lib/nagios/cctv_digest_prev_self_heal.json"
+SELF_HEAL_COUNT_FILE="${WORKDIR}/self_heal_count.txt"
+: > "$SELF_HEAL_COUNT_FILE"
+
+RESULTS_FILE="$RESULTS_FILE" \
+HOSTLIST_FILE="${WORKDIR}/hostlist.txt" \
+SELF_HEAL_STATE="$SELF_HEAL_STATE" \
+SELF_HEAL_COUNT_FILE="$SELF_HEAL_COUNT_FILE" \
+HISTORY_FILE="/home/www/cammon/data/action_history.json" \
+python3 - <<'PYIN_HEAL'
+import json
+import os
+import re
+import uuid
+from datetime import datetime, timezone, timedelta
+
+KST = timezone(timedelta(hours=9))
+
+results_path = os.environ.get("RESULTS_FILE")
+hostlist_path = os.environ.get("HOSTLIST_FILE")
+state_path = os.environ.get("SELF_HEAL_STATE")
+history_path = os.environ.get("HISTORY_FILE")
+count_path = os.environ.get("SELF_HEAL_COUNT_FILE")
+
+ip_by_host = {}
+if hostlist_path and os.path.exists(hostlist_path):
+    with open(hostlist_path, "r", encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split("\t")
+            if len(parts) >= 2:
+                ip_by_host[parts[0]] = parts[1]
+
+prev = {}
+if state_path and os.path.exists(state_path):
+    try:
+        prev = json.load(open(state_path, encoding="utf-8"))
+        if not isinstance(prev, dict):
+            prev = {}
+    except Exception:
+        prev = {}
+
+reason_label = {
+    "hls_stall": "HLS 0초 멈춤 자동조치",
+    "mtime_stale": "세그먼트 미갱신 자동조치",
+}
+
+new_events = []
+curr_state = dict(prev)
+
+if results_path and os.path.exists(results_path):
+    with open(results_path, "r", encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split("\t")
+            if len(parts) < 3:
+                continue
+            hn, _rc, out = parts[0], parts[1], parts[2]
+            m_at = re.search(r"self_heal_at=(\d+)", out)
+            m_rs = re.search(r"self_heal_reason=([^\s;|]+)", out)
+            if not m_at:
+                continue
+            heal_at = int(m_at.group(1))
+            if heal_at <= 0:
+                continue
+            reason = (m_rs.group(1) if m_rs else "").strip() or "unknown"
+            # state 값이 dict(구 쿨다운 포맷)여도 heal_at만 사용
+            prev_raw = prev.get(hn, 0)
+            if isinstance(prev_raw, dict):
+                try:
+                    prev_at = int(prev_raw.get("heal_at") or 0)
+                except Exception:
+                    prev_at = 0
+            else:
+                try:
+                    prev_at = int(prev_raw or 0)
+                except Exception:
+                    prev_at = 0
+            if heal_at <= prev_at:
+                curr_state[hn] = prev_at
+                continue
+
+            m_cam = re.search(r"-cam-(\d+)$", hn)
+            if not m_cam:
+                curr_state[hn] = heal_at
+                continue
+            cam_id = f"cam{int(m_cam.group(1)):02d}"
+            ip = ip_by_host.get(hn, "")
+            label = reason_label.get(reason, f"자동조치({reason})")
+            created = datetime.fromtimestamp(heal_at, tz=KST).strftime("%Y-%m-%d %H:%M:%S")
+            new_events.append({
+                "id": "h" + uuid.uuid4().hex[:16],
+                "type": "cctv_relay_restart",
+                "title": f"캠 서버 {cam_id} ({ip}) cctv-relay 자동 재기동 ({label})",
+                "status": "success",
+                "detail": {
+                    "cam_id": cam_id,
+                    "ip": ip,
+                    "service_status": "active",
+                    "output": label,
+                    "auto": True,
+                    "trigger": reason,
+                    "host_name": hn,
+                    "self_heal_at": heal_at,
+                },
+                "created_at": created,
+            })
+            curr_state[hn] = heal_at
+
+# dict 잔여 정리 (int만 유지)
+for hn, v in list(curr_state.items()):
+    if isinstance(v, dict):
+        try:
+            curr_state[hn] = int(v.get("heal_at") or 0)
+        except Exception:
+            curr_state[hn] = 0
+
+if new_events and history_path:
+    history = []
+    if os.path.exists(history_path):
+        try:
+            history = json.load(open(history_path, encoding="utf-8"))
+            if not isinstance(history, list):
+                history = []
+        except Exception:
+            history = []
+    new_events.sort(key=lambda e: e.get("detail", {}).get("self_heal_at") or 0)
+    history = list(reversed(new_events)) + history
+    if len(history) > 500:
+        history = history[:500]
+    tmp = history_path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(history, f, indent=4, ensure_ascii=False)
+        f.write("\n")
+    os.replace(tmp, history_path)
+    try:
+        os.chmod(history_path, 0o666)
+    except Exception:
+        pass
+
+if state_path:
+    os.makedirs(os.path.dirname(state_path), exist_ok=True)
+    tmp = state_path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(curr_state, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, state_path)
+
+if count_path:
+    with open(count_path, "w", encoding="utf-8") as f:
+        f.write(str(len(new_events)))
+PYIN_HEAL
+
+HEAL_COUNT=0
+if [ -f "$SELF_HEAL_COUNT_FILE" ]; then
+    HEAL_COUNT=$(cat "$SELF_HEAL_COUNT_FILE" 2>/dev/null || echo 0)
+fi
+if [ "${HEAL_COUNT:-0}" -gt 0 ] 2>/dev/null; then
+    log "self-heal history logged: ${HEAL_COUNT} event(s)"
 fi
 
 # ---- 5) 이전 장애 상태 읽기 ----
@@ -381,11 +719,11 @@ mv -f "$STATE_TMP" "$STATE_FILE"
 
 # ---- 8) 로그 ----
 
-log "check completed: critical=$PROBLEM_COUNT current_problem=${#CURRENT_PROBLEM_HOSTS[@]} recovered=$RECOVERED_COUNT excepted=${#EXCEPT_HOSTS[@]}"
+log "check completed: critical=$PROBLEM_COUNT current_problem=${#CURRENT_PROBLEM_HOSTS[@]} recovered=$RECOVERED_COUNT excepted=${#EXCEPT_HOSTS[@]} mail_enabled=$ALERT_MAIL_ENABLED"
 
 # ---- 9) 메일 설정 ----
 
-MAIL_TO="${MAIL_TO:-stw@example.com}"
+MAIL_TO="${MAIL_TO:-}"
 MAIL_FROM="cctv-monitor@localhost"
 MONITOR_URL="http://cammon.example.com:1080/"
 GENERATED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
@@ -408,9 +746,15 @@ MAIL_STYLE="
     background:#1e293b;
     border:1px solid rgba(255,255,255,0.08);
     border-radius:12px;
-    max-width:680px;
+    max-width:920px;
     margin:0 auto;
     overflow:hidden;
+  }
+  .action-cell{
+    font-size:12px;
+    color:#fbbf24;
+    line-height:1.45;
+    max-width:320px;
   }
   .card-header{
     padding:24px 28px 20px;
@@ -506,6 +850,26 @@ MAIL_STYLE="
   }
 </style>"
 
+# 장애 유형별 권장 조치
+# kind: hls_stall | (그 외는 out 메시지로 추론)
+recommend_action() {
+    local out="$1"
+    local kind="${2:-}"
+
+    if [ "$kind" = "hls_stall" ] || echo "$out" | grep -qi 'HLS stall'; then
+        echo "캠 설정 배포/재기동 → cctv-relay 서비스 재기동 조치 시도 필요 (세그먼트는 갱신되나 EXTINF≈0으로 영상이 0초에 멈춤)"
+        return
+    fi
+
+    # 캠 통신 불가 / 세그먼트 stale (age 폭주 포함)
+    if echo "$out" | grep -qiE 'segment stale|age=999999|Connection refused|No route to host|Connection timed out|Socket timeout|Could not connect|NRPE:'; then
+        echo "알람 지속 발생 시 DDNS Origin IP 변경 여부 확인. 캠 설정 배포를 통해 Origin IP 반영 작업 진행."
+        return
+    fi
+
+    echo "캠 서버 통신 및 cctv-relay 상태 확인. 통신 불가면 Origin IP 확인, 세그먼트 OK·재생 불가면 cctv-relay 재기동."
+}
+
 # 예외처리 테이블 HTML 생성 함수 (CRITICAL·RECOVERY 공용)
 build_except_table() {
     if [ ${#EXCEPT_HOSTS[@]} -eq 0 ]; then
@@ -554,19 +918,21 @@ send_html_mail() {
     } | /usr/sbin/sendmail -t
 }
 
-# ---- 10) CRITICAL 메일 ----
+# ---- 10) CRITICAL 메일 (스케줄/전역 enabled 일 때만) ----
 
-if [ "$PROBLEM_COUNT" -gt 0 ]; then
+if [ "$ALERT_MAIL_ENABLED" = "true" ] && [ "$PROBLEM_COUNT" -gt 0 ]; then
 
-    # 장애 테이블
+    # 장애 테이블 (권장 조치 포함)
     CRIT_TABLE="<table class='data'>"
-    CRIT_TABLE+="<tr><th>호스트</th><th>상태</th><th>상세 메시지</th></tr>"
+    CRIT_TABLE+="<tr><th>호스트</th><th>상태</th><th>상세 메시지</th><th>권장 조치</th></tr>"
     for row in "${PROBLEM_ROWS[@]}"; do
-        IFS=$'\t' read -r hn rc out <<< "$row"
+        IFS=$'\t' read -r hn rc out kind <<< "$row"
+        action="$(recommend_action "$out" "$kind")"
         CRIT_TABLE+="<tr>"
         CRIT_TABLE+="<td>${hn}</td>"
         CRIT_TABLE+="<td><span class='chip chip-critical'>CRITICAL</span></td>"
         CRIT_TABLE+="<td style='font-size:12px;color:#94a3b8;'>${out}</td>"
+        CRIT_TABLE+="<td class='action-cell'>${action}</td>"
         CRIT_TABLE+="</tr>"
     done
     CRIT_TABLE+="</table>"
@@ -607,9 +973,9 @@ if [ "$PROBLEM_COUNT" -gt 0 ]; then
     log "CRITICAL mail sent: $PROBLEM_COUNT hosts"
 fi
 
-# ---- 11) RECOVERY 메일 ----
+# ---- 11) RECOVERY 메일 (스케줄/전역 enabled 일 때만) ----
 
-if [ "$RECOVERED_COUNT" -gt 0 ]; then
+if [ "$ALERT_MAIL_ENABLED" = "true" ] && [ "$RECOVERED_COUNT" -gt 0 ]; then
 
     # 복구 테이블
     RECV_TABLE="<table class='data'>"

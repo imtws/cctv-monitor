@@ -71,9 +71,9 @@ cammon/
   {
     "id": "cam01",
     "num": 1,
-    "stadium": "인천기계공업고등학교 (제1경기장)",
-    "category": "금형",
-    "ddns": "https://ddns.hanwha-security.com/mold8088",
+    "stadium": "예시경기장 (제1경기장)",
+    "category": "예시종목",
+    "ddns": "https://example.com/cam01",
     "status": "ACTIVE",
     "alert_enabled": true,
     "alert_start": "08:00",
@@ -102,7 +102,8 @@ cammon/
   "start_time": "08:00",
   "end_time": "18:00",
   "work_days": [1, 2, 3, 4, 5],
-  "recipient": "stw@example.com",
+  "recipient": "alert@example.com",
+  "root_password": "",
   "suppress_until": null
 }
 ```
@@ -123,6 +124,9 @@ cammon/
 | `경기직종명` | 종목명 |
 | `DDNS명` | DDNS 주소 |
 
+> 엑셀에 있는 카메라만 `cctv_config.json`에 남습니다. **엑셀에 없는 기존 번호는 목록에서 제거**되며,
+> NRPE 알람(`cctv_digest.sh`)도 해당 번호만 모니터링합니다. Nagios에 cfg가 남아 있어도 엑셀 미등록 호스트는 알람하지 않습니다.
+>
 > 기존 JSON에 동일 `id`가 있으면 `status`, `alert_enabled`, `alert_start`, `alert_end` 값은 유지됩니다.
 > 신규 카메라는 기본값 `status: STOPPED`로 생성됩니다.
 
@@ -131,6 +135,21 @@ cammon/
 ## NRPE 알람 (`scripts/cctv_digest.sh`)
 
 cron으로 주기적으로 실행되며 각 카메라 서버에 NRPE로 접속해 HLS 세그먼트 상태를 확인합니다.
+추가로 NRPE가 OK여도 `webcam.m3u8`의 `TARGETDURATION`/`EXTINF`가 비정상(≈0)이면
+**영상 0초 멈춤(HLS stall)** 으로 CRITICAL 메일을 발송합니다.
+
+CRITICAL 메일 테이블에는 이슈 유형별 **권장 조치** 컬럼이 포함됩니다.
+
+| 유형 | 감지 조건 | 권장 조치 |
+|------|-----------|-----------|
+| 통신/세그먼트 stale | `segment stale`, `age=999999` 등 | DDNS Origin IP 변경 여부 확인 → 캠 설정 배포로 Origin IP 반영 |
+| HLS 0초 멈춤 | `TARGETDURATION<1` 또는 `EXTINF` 평균 `<0.5` | cammon 배포/관리 → cctv-relay 서비스 재기동 |
+
+캠 서버 로컬 cron(`scripts/cam-server/check_ffmpeg.sh`, 1분 주기)도 동일 조건으로
+`cctv-relay`를 **자동 재기동**합니다. (기존에는 m3u8 mtime만 검사해 이 케이스를 놓침)
+
+자동 재기동 시각/사유는 상태파일(`SELF_HEAL_AT`/`SELF_HEAL_REASON`) → NRPE → `cctv_digest.sh` 경로로
+cammon **작업이력**(cctv-relay 재기동, `자동` 배지)에 남습니다.
 
 ### 알람 예외처리 로직
 
@@ -148,11 +167,17 @@ cron으로 주기적으로 실행되며 각 카메라 서버에 NRPE로 접속�
 새 계정(example-account, example-account 등)이 추가되어도 **별도 설정 없이 자동으로 인식**됩니다.
 Nagios cfg 파일만 등록되어 있으면 됩니다.
 
+### 모니터링 대상
+
+`cctv_config.json`(엑셀 업로드 결과)에 **등록된 카메라 번호만** NRPE 조회·알람 대상입니다.
+Nagios에 남아 있는 해지/미등록 호스트는 조회하지 않으며 알람 예외(`미등록(엑셀 외)`)로 처리됩니다.
+
 ### 예외처리 우선순위
 
 1. `alert_config.json`의 `suppress_until` → 전체 캠 알람 차단
-2. `cctv_config.json`의 `status: STOPPED / INSPECTION` → 해당 캠 알람 차단
-3. `cctv_config.json`의 `suppress_until` → 해당 캠 임시 알람 차단
+2. `cctv_config.json` **미등록** Nagios 호스트 → 알람 차단 (엑셀에 없는 번호)
+3. `cctv_config.json`의 `status: STOPPED / INSPECTION` → 해당 캠 알람 차단
+4. `cctv_config.json`의 `suppress_until` → 해당 캠 임시 알람 차단
 
 ### cron 등록 예시
 
@@ -197,6 +222,12 @@ http://{cam_id}.example.com:8080/hls/webcam.m3u8
 ## 초기 설정 / 운영 메모
 
 ```bash
+# 운영 데이터 파일 생성 (예제 복사 후 값 입력)
+cp data/alert_config.json.example data/alert_config.json
+cp data/cctv_config.json.example data/cctv_config.json
+cp data/cctv_ips.json.example data/cctv_ips.json
+# alert_config.json 에 수신 메일·root_password 등 실제 값 설정
+
 # uploads 폴더 권한
 chown apache:apache /home/www/cammon/data/uploads
 chmod 755 /home/www/cammon/data/uploads
@@ -204,6 +235,8 @@ chmod 755 /home/www/cammon/data/uploads
 # 엑셀 파서 의존성
 pip3 install openpyxl
 ```
+
+> `data/*.json` 은 `.gitignore` 로 제외됩니다. 비밀번호·IP·실제 DDNS 등은 저장소에 올리지 마세요.
 
 ### 트러블슈팅
 
