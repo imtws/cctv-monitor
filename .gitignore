@@ -32,4 +32,4 @@ debug_logs/
 # 백업 디렉토리 (선택적으로 제외)
 stw_backup/
 data/uploads/
-data/live_status.json
+package-lock.json
