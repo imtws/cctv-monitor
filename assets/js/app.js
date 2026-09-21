@@ -973,7 +973,6 @@ function renderSettingsDrawer() {
     if (settingsDrawerMode === 'env') {
         if (footerEl) footerEl.style.display = 'none';
         const currentRecipient = alertConfig?.recipient || '';
-        const currentPassword  = alertConfig?.root_password || '';
         const currentStartTime = alertConfig?.start_time || '08:00';
         const currentEndTime   = alertConfig?.end_time   || '18:00';
         const currentWorkDays  = alertConfig?.work_days  || [1,2,3,4,5];
@@ -1043,23 +1042,7 @@ function renderSettingsDrawer() {
                     </div>
                 </div>
                 <p style="font-size:0.78rem;color:var(--text-sub);margin:8px 0 0;">※ 저장 시 즉시 동기화되며, 이후에도 주기적으로 캠 서버 cron 상태가 맞춰집니다.</p>
-            </section>
-            
-            <section class="drawer-section" style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px;">
-                <div class="drawer-section-title"><i class="fa-solid fa-key" style="margin-right:6px;"></i>캠 서버 root 패스워드</div>
-                <p style="font-size:0.82rem;color:var(--text-sub);margin:8px 0 12px;">캠 서버(cctv.info 배포 대상 서버)의 root SSH 비밀번호를 설정합니다.</p>
-                <div style="position:relative; width:100%; margin-bottom:20px;">
-                    <input type="password" class="text-input" id="settings-root-password"
-                        placeholder="[비밀번호 입력]"
-                        value="${escapeHtml(currentPassword)}"
-                        style="width:100%; padding-right:40px;"/>
-                    <button class="btn" onclick="togglePasswordVisibility('settings-root-password', this)" style="position:absolute; right:4px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:var(--text-sub); padding:8px; cursor:pointer;" type="button">
-                        <i class="fa-solid fa-eye"></i>
-                    </button>
-                </div>
-            </section>
-
-            <section class="drawer-section" style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px;">
+            </section>`r`n<section class="drawer-section" style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px;">
                 <div class="drawer-section-title"><i class="fa-solid fa-file-excel" style="margin-right:6px;"></i>경기장 정보 엑셀 업로드</div>
                 <p style="font-size:0.82rem;color:var(--text-sub);margin:8px 0 12px;">
                     경기장·종목·DDNS가 담긴 <code>.xlsx</code>를 올리면 모니터링·배포정보·재기동 목록의 경기장/종목이 엑셀 기준으로 맞춰집니다.
@@ -1409,31 +1392,10 @@ function showToast(msg) {
    모니터링 환경 설정 저장
    ═══════════════════════════════════════════════════════════ */
 
-function togglePasswordVisibility(inputId, btnEl) {
-    const input = document.getElementById(inputId);
-    if (!input) return;
-    const icon = btnEl.querySelector('i');
-    if (input.type === 'password') {
-        input.type = 'text';
-        if (icon) {
-            icon.classList.remove('fa-eye');
-            icon.classList.add('fa-eye-slash');
-        }
-    } else {
-        input.type = 'password';
-        if (icon) {
-            icon.classList.remove('fa-eye-slash');
-            icon.classList.add('fa-eye');
-        }
-    }
-}
-
 function saveEnvSettings() {
     const emailEl = document.getElementById('settings-email');
-    const pwdEl = document.getElementById('settings-root-password');
     if (!emailEl) return;
     const email = emailEl.value.trim();
-    const password = pwdEl ? pwdEl.value : '';
     
     if (!email) {
         showToast('메일 주소를 입력해주세요.');
@@ -1476,7 +1438,6 @@ function saveEnvSettings() {
 
     const fd = new FormData();
     fd.append('recipient', email);
-    fd.append('root_password', password);
     fd.append('start_time', startTime);
     fd.append('end_time', endTime);
     workDays.forEach(d => fd.append('work_days[]', d));

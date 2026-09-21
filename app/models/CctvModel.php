@@ -235,12 +235,7 @@ class CctvModel
             $alert['recipient'] = $fields['recipient'];
         } elseif (empty($alert['recipient'])) {
             $alert['recipient'] = $defaultRecipient;
-        }
-        // root_password: 전달된 경우 저장 (빈 값이나 문자열 가능)
-        if (array_key_exists('root_password', $fields)) {
-            $alert['root_password'] = $fields['root_password'];
-        }
-        // 트래픽 수집 기간
+        }`r`n        // 트래픽 수집 기간
         if (array_key_exists('traffic_enabled', $fields)) {
             $raw = $fields['traffic_enabled'];
             $alert['traffic_enabled'] = ($raw === true || $raw === 1 || $raw === '1' || $raw === 'true');
@@ -651,7 +646,7 @@ class CctvModel
         }
 
         $alertConfig = $this->getAlertConfig();
-        $password = $alertConfig['root_password'] ?? '';
+        $password = $alertConfiggetenv('CAMMON_ROOT_PASSWORD') ?: '';
         if (!$password) {
             return ['success' => false, 'message' => 'Root password is not configured in settings.'];
         }
@@ -735,7 +730,7 @@ class CctvModel
         }
 
         $alertConfig = $this->getAlertConfig();
-        $password = $alertConfig['root_password'] ?? '';
+        $password = $alertConfiggetenv('CAMMON_ROOT_PASSWORD') ?: '';
         if (!$password) {
             return ['success' => false, 'status' => 'no_pw', 'message' => '패스워드 미설정'];
         }

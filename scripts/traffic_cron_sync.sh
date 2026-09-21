@@ -31,7 +31,7 @@ cfg = json.load(open(cfg_path))
 enabled = bool(cfg.get("traffic_enabled"))
 start = str(cfg.get("traffic_start") or "").strip().replace("T", " ")
 end = str(cfg.get("traffic_end") or "").strip().replace("T", " ")
-password = str(cfg.get("root_password") or "")
+password = os.environ.get("CAMMON_ROOT_PASSWORD", "")
 
 active = False
 if enabled and start and end:
